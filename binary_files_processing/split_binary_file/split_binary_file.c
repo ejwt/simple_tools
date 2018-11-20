@@ -15,33 +15,20 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
-
-#ifdef  WIN32
-typedef __int64 INT64;
-#else
-typedef long long INT64;
-#endif
+#include <stdint.h>
 
 typedef unsigned int UINT32;
 typedef unsigned char UINT8;
 
 #define MAX_NUM_DST_BLOCK    9999
-#define MiB    1048576
 
 int main()
 {
-  char   fname_src[384]; // source filename
+  int8_t   fname_src[384]; // source filename
   FILE    *fp_src;
-  INT64  i; // loop counter
+  int64_t  i; // loop counter; 2^63 - 1 (byte) = 8,388,608 (TiB)
   int    split_mode; // mode, 0 or 1
   UINT8  byte_buffer = 0;
-  UINT8  *MiB_buffer;
-
-  if ( NULL == (MiB_buffer = ((UINT8 *)malloc(MiB)) ) ) /* 1 MiB buffer */
-  {
-    printf("Error! Inssuficient memory!!\n");
-    goto Exit_prog;
-  }
 
   //********* mode selection & source file operation *********
   printf("This program splits a binary file. There are two modes.\nMode 0: Split the file evenly \
@@ -70,19 +57,19 @@ input_again2:
   //************************** mode 0 *************************
   if (split_mode == 0)
   {
-    INT64  dst_block_size = 1024; // destination block size
+    int64_t  dst_block_size = 1024; // destination block size
     UINT32  num_dst_block = 1; // the number of destination blocks, the actual number is (num_dst_block + extra_dst_block_flag)
-    INT64  last_block_size = 0; // size of the last destination block (smaller than others,
+    int64_t  last_block_size = 0; // size of the last destination block (smaller than others,
                                   // when src_length is not divisible by dst_block_size)
-    char  *fname_bat = "join.bat"; // filename of the batch file
-    char  *fname_tmp = "dst_block_name.tmp"; // filename of the temporary file that stores the filenames of destination blocks
+    int8_t  *fname_bat = "join.bat"; // filename of the batch file
+    int8_t  *fname_tmp = "dst_block_name.tmp"; // filename of the temporary file that stores the filenames of destination blocks
     FILE   *fp_tmp, *fp_bat, *fp_dst_block;
-    char   fname_dst_block_0[340]; // filename of destination blocks, before block number
-    char   fname_dst_block_2[340]; // filename of destination blocks, after block number
-    char   fname_dst_block_all[384]; // filename of destination blocks
+    int8_t   fname_dst_block_0[340]; // filename of destination blocks, before block number
+    int8_t   fname_dst_block_2[340]; // filename of destination blocks, after block number
+    int8_t   fname_dst_block_all[384]; // filename of destination blocks
     UINT32  extra_dst_block_flag = 0;
     UINT32  b_continue = 0;
-    INT64  j; // loop counter
+    int64_t  j; // loop counter
 
 input_again4L0:
     printf("\nInput the size (in bytes) of the destination block: ");
@@ -232,9 +219,9 @@ input_again4L2:
   //************************** mode 1 ************************
   else
   {
-    char   fname_dst[384]; // filename
-    INT64  startAddress = 0;
-    INT64  endAddress   = 0;
+    int8_t   fname_dst[384]; // filename
+    int64_t  startAddress = 0;
+    int64_t  endAddress   = 0;
     FILE    *fp_dst;
 
     printf("\nInput the destination filename: ");

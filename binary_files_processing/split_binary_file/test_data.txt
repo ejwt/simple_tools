@@ -1,0 +1,5 @@
+head -c 547428723 /dev/urandom > LT_2GiB.yuv     547428723 = 3 * 182476241
+head -c 2147483648 /dev/urandom > 2GiB.yuv      2147483648 = 2 ^ 31 
+head -c 2695150243 /dev/urandom > MT_2GiB.yuv   2695150243 = 89 * 601 * 50387
+head -c 4294967296 /dev/urandom > 4GiB.yuv      4294967296 = 2 ^ 32 
+head -c 6746518851 /dev/urandom > MT_4GiB.yuv   6746518851 = 3 * 16433 * 136849
