@@ -1,5 +1,5 @@
 /*
-* Copyleft  2005-2007  Fu Xing (Andy)
+* Copyleft  2010-2016  Fu Xing (Andy)
 * Author: Fu Xing (Andy)
 *
 * File name: split_binary_file.c
@@ -9,9 +9,8 @@
 * together. Mode 1: Specify the decimal start address and end address,
 * the data between them are saved into a new file.
 *
-* Current version: 2.0
-* Author: Fu Xing
-* Date: 2007-5-13
+* Current version: 2.1
+* Date: 2010-08-30
 *
 */
 #include <stdio.h>
@@ -114,25 +113,25 @@ input_again4:
     if (NULL == (fp_tmp = fopen(fname_tmp, "w+")))
     {
       printf("\7Error!Can't creat file %s \n", fname_tmp);
-      goto Exit_prog;
+    goto Exit_prog;
     }
 
     if (NULL == (fp_bat = fopen(fname_bat, "w")))
     {
       printf("\7Error!Can't creat file %s \n", fname_bat);
-      goto Exit_prog;
+    goto Exit_prog;
     }
 
     fprintf(fp_bat, "copy /B ");
 
     for (i=0; i<(num_dst_block+extra_dst_block_flag-1); i++)
     {
-      fprintf(fp_tmp, "%s_%04u%s\n", fname_dst_block_0, i, fname_dst_block_2);
-      fprintf(fp_bat, "%s_%04u%s+", fname_dst_block_0, i, fname_dst_block_2);
+      fprintf(fp_tmp, "%s%04u%s\n", fname_dst_block_0, i, fname_dst_block_2);
+      fprintf(fp_bat, "%s%04u%s+", fname_dst_block_0, i, fname_dst_block_2);
     }
 
-    fprintf(fp_tmp, "%s_%04u%s\n", fname_dst_block_0, i, fname_dst_block_2);
-    fprintf(fp_bat, "%s_%04u%s", fname_dst_block_0, i, fname_dst_block_2);
+    fprintf(fp_tmp, "%s%04u%s\n", fname_dst_block_0, i, fname_dst_block_2);  /* last filename */
+    fprintf(fp_bat, "%s%04u%s", fname_dst_block_0, i, fname_dst_block_2);
 
     fprintf(fp_bat, " Joined_%s\n", fname_src);
     fclose(fp_bat);
