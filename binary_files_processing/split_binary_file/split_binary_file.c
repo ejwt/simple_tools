@@ -3,14 +3,15 @@
 * Author: Fu Xing (Andy)
 *
 * File name: split_binary_file.c
+*
 * Abstract: The program splits a binary file. There are two modes. Mode 0: Split the file evenly
 * and generate several small file blocks. A batch file join.bat is also generated to join the file blocks
 * together. Mode 1: Specify the decimal start address and end address,
 * the data between them are saved into a new file.
 *
-* Current version: 1.0
+* Current version: 2.0
 * Author: Fu Xing
-* Date: 2005-8-5
+* Date: 2007-5-13
 *
 */
 #include <stdio.h>
@@ -23,18 +24,10 @@ typedef char INT8S;
 
 #define MAX_NUM_DST_BLOCK    3000
 
-void Exit_prog(void)
-{
-  getchar();
-  printf("\nPress ENTER to quit.\n");
-  getchar();
-}
-
-
 void main()
 {
   //********* variable declaration *********
-  INT8S   fname_src[80]; //filename
+  INT8S   fname_src[250]; //filename
   FILE    *fp_src;
   INT32U  i; //loop counter
   INT32U  split_mode; //mode, 0 or 1
@@ -43,7 +36,7 @@ void main()
 
 
   //********* mode selection & source file operation *********
-  printf("\nThe program is splits a binary file. There's two modes. Mode 0: Split the file evenly \
+  printf("\nThe program splits a binary file. There are two modes. Mode 0: Split the file evenly \
 and generate several small file blocks. A batch file join.bat is also generated to join the file blocks together. \
 Mode 1: Specify the decimal start address and end address, the data between them are saved into a new file.\n");
 
@@ -57,12 +50,13 @@ start address and end address. : ");
     goto input_again1;
   }
 
+input_again5:
   printf("\nInput the source file name: ");
   scanf("%s", fname_src);
   if (NULL == (fp_src = fopen(fname_src, "rb")))
   {
     printf("\7Error!Can't open file %s \n", fname_src);
-    Exit_prog();
+    goto input_again5;
   }
 
   fseek(fp_src, 0, SEEK_END);
@@ -79,13 +73,14 @@ start address and end address. : ");
     INT32U  last_block_size = 0; //size of the last destination block(smaller than others,
             //when src_length can't be divided exactly by dst_block_size
     INT8S  *fname_bat = "join.bat"; //filename of the batch file
-    INT8S  *fname_tmp = "dst_block_name.tmp"; //filename of the temporary file that stores the filename of destination block
+    INT8S  *fname_tmp = "dst_block_name.tmp"; //filename of the temporary file that stores the filenames of destination blocks
     FILE   *fp_tmp, *fp_bat, *fp_dst_block;
-    INT8S   fname_dst_block_0[64]; //filename of destination block, before block number
-    INT8S   fname_dst_block_2[20]; //filename of destination block, after block number
-    INT8S   fname_dst_block_all[96]; //filename of destination block
+    INT8S   fname_dst_block_0[220]; //filename of destination block, before block number
+    INT8S   fname_dst_block_2[25]; //filename of destination block, after block number
+    INT8S   fname_dst_block_all[250]; //filename of destination block
     INT32U  extra_dst_block_flag = 0;
     INT32U  j; //loop counter
+
 input_again4:
     printf("\nInput the size(in bytes) of the destination block: ");
     scanf("%u", &dst_block_size);
@@ -112,64 +107,85 @@ input_again4:
     //***** generate dst_block_name.tmp and join.bat *****
     printf("\nInput the destination block name(the part that before block number) : ");
     scanf("%s", fname_dst_block_0);
+
     printf("\nInput the destination block name(the part that after block number) : ");
     scanf("%s", fname_dst_block_2);
+
     if (NULL == (fp_tmp = fopen(fname_tmp, "w+")))
     {
       printf("\7Error!Can't creat file %s \n", fname_tmp);
-      Exit_prog();
+      goto Exit_prog;
     }
+
     if (NULL == (fp_bat = fopen(fname_bat, "w")))
     {
       printf("\7Error!Can't creat file %s \n", fname_bat);
-      Exit_prog();
+      goto Exit_prog;
     }
+
     fprintf(fp_bat, "copy /B ");
 
-    for (i=0; i<(num_dst_block+extra_dst_block_flag); i++)
+    for (i=0; i<(num_dst_block+extra_dst_block_flag-1); i++)
     {
       fprintf(fp_tmp, "%s_%04u%s\n", fname_dst_block_0, i, fname_dst_block_2);
       fprintf(fp_bat, "%s_%04u%s+", fname_dst_block_0, i, fname_dst_block_2);
     }
-    fprintf(fp_bat, "\b Joined_%s\n", fname_src); //'\b' is backspace, it will NOT remove the last '+' sign,
-                    //but when join.bat is double clicked, '\b\ takes effect
+
+    fprintf(fp_tmp, "%s_%04u%s\n", fname_dst_block_0, i, fname_dst_block_2);
+    fprintf(fp_bat, "%s_%04u%s", fname_dst_block_0, i, fname_dst_block_2);
+
+    fprintf(fp_bat, " Joined_%s\n", fname_src);
     fclose(fp_bat);
 
     printf("\nBegin procssing, please wait patiently......\n");
 
     fseek(fp_tmp, 0, SEEK_SET);
+
     for (i=0; i<num_dst_block; i++)
     {
       fscanf(fp_tmp, "%s", fname_dst_block_all); //read filename from temporary file
+
       if (NULL == (fp_dst_block = fopen(fname_dst_block_all, "wb"))) //create destination block
       {
         printf("\n\7Error! Can't creat file %s", fname_dst_block_all);
-        Exit_prog();
+        goto Exit_prog;
       }
+
       for (j=0; j<dst_block_size; j++) //copy data
       {
         fread(&byte_buffer, 1, 1, fp_src);
         fwrite(&byte_buffer, 1, 1, fp_dst_block);
       }
+
       fclose(fp_dst_block);
     }
+
     if (extra_dst_block_flag == 1) //copy last block(smaller than others)
     {
       fscanf(fp_tmp, "%s", fname_dst_block_all); //read filename from temporary file
+
       if (NULL == (fp_dst_block = fopen(fname_dst_block_all, "wb"))) //create destination block
       {
         printf("\n\7Error! Can't creat file %s", fname_dst_block_all);
-        Exit_prog();
+        goto Exit_prog;
       }
+
       for (j=0; j<last_block_size; j++) //copy data
       {
         fread(&byte_buffer, 1, 1, fp_src);
         fwrite(&byte_buffer, 1, 1, fp_dst_block);
       }
+
       fclose(fp_dst_block);
     }
 
     fclose(fp_tmp);
+
+    if (-1 == remove("dst_block_name.tmp") )
+    {
+      printf("\n Can't delete temporary file dst_block_name.tmp. You need to delete it manually.\n");
+    }
+
   }
 
 
@@ -180,17 +196,19 @@ input_again4:
     INT32U  startAddress = 0;
     INT32U  endAddress = 0;
     FILE  *fp_dst;
+
     printf("\nInput the destination file name: ");
     scanf("%s", fname_dst);
     if (NULL == (fp_dst = fopen(fname_dst, "wb")))
     {
       printf("\7Error!Can't create file %s \n", fname_dst);
-      Exit_prog();
+      goto Exit_prog;
     }
+
 input_again2:
     printf("\nInput decimal start address: ");
     scanf("%u", &startAddress);
-    if ((startAddress<0) || (startAddress>(src_length-1)))
+    if ( (startAddress<0) || (startAddress>(src_length-1)) )
     {
       printf("\7\nError! startAddress must belong to [0, %u]. Please input again.\n", src_length-1);
       goto input_again2;
@@ -199,7 +217,7 @@ input_again2:
 input_again3:
     printf("\nInput decimal end address: ");
     scanf("%u", &endAddress);
-    if ((endAddress<startAddress) || (endAddress>(src_length-1)))
+    if ( (endAddress<startAddress) || (endAddress>(src_length-1)) )
     {
       printf("\7\nError! endAddress must belong to [%u, %u]. Please input again.\n", startAddress, src_length-1);
       goto input_again3;
@@ -218,9 +236,10 @@ input_again3:
 
   fclose(fp_src);
   printf("\n Succeed !");
-  Exit_prog();
+
+Exit_prog:
+  printf("\nPress ENTER to quit.\n");
+  getchar();
+  getchar();
 }
-
-
-
 
