@@ -3,10 +3,10 @@
 * Author: Fu Xing (Andy)
 *
 * File name: M2TS_to_TS.c
-* Abstract: This program is used to convert *.m2ts and *.mts to *.ts files.
+* Abstract: This program converts *.m2ts and *.mts to *.ts files.
 *
-* Current version: 0.1
-* Last Modified: 2018-06-03
+* Current version: 0.2
+* Last Modified: 2018-11-19
 */
 
 #include <stdio.h>
@@ -42,80 +42,105 @@ static void make_filenames(char *in_filename, char *out_filename)
 }
 
 
-static void M2TS_to_TS(char *in_filename, FILE *log_file, unsigned int *error_count, unsigned int *skip_count)
+static void M2TS_to_TS(char *in_filename, FILE *log_file, unsigned int *error_count, unsigned int *skip_count, unsigned char *buffer)
 {
-	char     out_filename[320]; /* filenames */
-	FILE     *fp_in, *fp_out;
-	unsigned char    *buffer;    /* 192-byte buffer */
-	int   return_value1, return_value2;
+  char   out_filename[320]; /* filenames */
+  FILE   *fp_in, *fp_out;
+  int    return_value1, return_value2;
+  long   initial_offset = 4;
+  char   remove_output_file_flag = 0;
 
 /*========== open the input file ====================*/
-	if ( NULL == (fp_in = fopen(in_filename, "rb")) )
-	{
-		printf("\nError! Can't open input file %s\n", in_filename);
-		fprintf(log_file, "Error! Can't open input file %s\n", in_filename);
+  if ( NULL == (fp_in = fopen(in_filename, "rb")) )
+  {
+    printf("\nError! Can't open input file %s\n", in_filename);
+    fprintf(log_file, "Error! Can't open input file %s\n", in_filename);
     (*error_count)++;
-		return;
-	}
+    return;
+  }
 
-/*========== buffer allocation  ====================*/
-	if ( NULL == (buffer = (unsigned char *)malloc(192)) )
-	{
-		printf("\n%s: ERROR! Insufficient memory in allocating 192-byte buffer!\n", in_filename);
-		fprintf(log_file, "%s: ERROR! Insufficient memory in allocating 192-byte buffer!\n", in_filename);
-    (*error_count)++;
-		goto clean_up_A;
-	}
+/*========== detect input file format ====================*/
+  // For most *.m2ts and *.mts files, the 1st sync byte is at offset = 4,
+  // for some *.m2ts and *.mts files, the 1st sync byte is at offset = 0.
+  fread(buffer, 1, 5, fp_in);
+
+  if ( (buffer[0] != 0x47) && (buffer[4] == 0x47) )  // the 1st sync byte is at offset = 4
+  {
+    initial_offset = 4;
+  }
+  else if ( (buffer[0] == 0x47) && (buffer[4] != 0x47) )  // the 1st sync byte is at offset = 0
+  {
+    initial_offset = 0;
+    printf("\n%s: Warning! Special file: The 1st sync byte is at offset = 0.\n", in_filename);
+    fprintf(log_file, "%s: Warning! Special file: The 1st sync byte is at offset = 0.\n", in_filename);
+  }
+  else
+  {
+    printf("\n Unsupported input file format! SKIP %s\n", in_filename);
+    fprintf(log_file, "Unsupported input file format! SKIP %s\n", in_filename);
+    (*skip_count)++;
+    goto clean_up_A;
+  }
+
+  fseek(fp_in, initial_offset, SEEK_SET);
 
 /*========== open the output file  ====================*/
   make_filenames(in_filename, out_filename);
 
-	if ( NULL == (fp_out = fopen(out_filename, "wb")) )
-	{
-		printf("\n%s: Error! Can't create ouput file %s\n", in_filename);
-		fprintf(log_file, "%s: Error! Can't create ouput file %s\n", in_filename);
+  if ( NULL == (fp_out = fopen(out_filename, "wb")) )
+  {
+    printf("\n%s: Error! Can't create ouput file %s\n", in_filename, out_filename);
+    fprintf(log_file, "\n%s: Error! Can't create ouput file %s\n", in_filename, out_filename);
     (*error_count)++;
-		goto clean_up_B;
-	}
+    goto clean_up_A;
+  }
 
 /*========== Kernel processing  ====================*/
-	fseek(fp_in, 4, SEEK_SET);
-
   while ( !feof(fp_in) )
   {
     return_value1 = fread(buffer, 1, 192, fp_in);
     if (*buffer != 0x47)  // sync byte error
     {
-  		printf("\nSync byte error. SKIP %s!\n", in_filename);
-  		fprintf(log_file, "Sync byte error. SKIP %s!\n", in_filename);
+      printf("\nSync byte error. SKIP %s!\n", in_filename);
+      fprintf(log_file, "Sync byte error. SKIP %s!\n", in_filename);
       (*skip_count)++;
-  		goto clean_up_C;
-  	}
+      remove_output_file_flag = 1;
+      goto clean_up_C;
+    }
 
     return_value2 = fwrite(buffer, 1, 188, fp_out);
     if (return_value2 != 188)
     {
-  		printf("\n%s: ERROR writing output file.\n", in_filename);
-  		fprintf(log_file, "%s: ERROR writing output file.\n", in_filename);
+      printf("\n%s: ERROR writing ouput file %s\n", in_filename, out_filename);
+      fprintf(log_file, "\n%s: ERROR writing ouput file %s\n", in_filename, out_filename);
       (*error_count)++;
-  		goto clean_up_C;
-  	}
+      remove_output_file_flag = 1;
+      goto clean_up_C;
+    }
 
     if (return_value1 != 192)  // end of file reached
     {
-  		break;
-  	}
+      break;
+    }
   }
 
 clean_up_C:
   if (fp_out != NULL)
-    fclose(fp_out);
-
-clean_up_B:
-  if (buffer != NULL)
   {
-    free(buffer);
-    buffer = NULL;
+    fclose(fp_out);
+    if (remove_output_file_flag)
+    {
+      if (-1 == remove(out_filename) )
+      {
+        printf("\n Can't delete output file %s. You need to delete it manually.\n", out_filename);
+        fprintf(log_file, "Can't delete output file %s. You need to delete it manually.\n", out_filename);
+      }
+      else
+      {
+        printf("\n Output file %s has been deleted!\n", out_filename);
+        fprintf(log_file, "Output file %s has been deleted!\n", out_filename);
+      }
+    }
   }
 
 clean_up_A:
@@ -131,7 +156,8 @@ int main()
   struct _finddata_t  ffblk;  /* for searching *.m2ts and *.mts files */
   intptr_t   search_handle;   /* for searching *.m2ts and *.mts files */
   errno_t    err;             /* for searching *.m2ts and *.mts files */
-  int    return_value = 0;            /* for searching *.m2ts and *.mts files */
+  int    return_value = 0;    /* for searching *.m2ts and *.mts files */
+  unsigned char *buffer;      /* 192-byte buffer */
 
   unsigned int files_count_in = 0;  /* the number of input files */
   unsigned int error_count = 0;
@@ -143,6 +169,14 @@ int main()
   {
     printf("\nERROR! Can't create log.txt.\n");
     return  -1;
+  }
+
+/*========== buffer allocation  ====================*/
+  if ( NULL == (buffer = (unsigned char *)malloc(192)) )
+  {
+    printf("\nERROR! Insufficient memory in allocating 192-byte buffer!\n");
+    fprintf(log_file, "ERROR! Insufficient memory in allocating 192-byte buffer!\n");
+    goto clean_up_end;
   }
 
 /*   ==========   Process the first M2TS file   =============   */
@@ -180,7 +214,7 @@ int main()
       EINVAL
         Invalid file name specification or the file name given was larger than MAX_PATH.
   */
-	search_handle = _findfirst("*.m2ts", &ffblk);  /* search for the first M2TS file */
+  search_handle = _findfirst("*.m2ts", &ffblk);  /* search for the first M2TS file */
   if (search_handle == -1)  // error occurred
   {
     _get_errno(&err);
@@ -206,7 +240,7 @@ int main()
   }
 
   strcpy(in_filename, ffblk.name);
-  M2TS_to_TS(in_filename, log_file, &error_count, &skip_count);
+  M2TS_to_TS(in_filename, log_file, &error_count, &skip_count, buffer);
   previous_error_count = error_count;
   previous_skip_count = skip_count;
   files_count_in++;
@@ -261,7 +295,7 @@ int main()
     }
 
     strcpy(in_filename, ffblk.name);
-    M2TS_to_TS(in_filename, log_file, &error_count, &skip_count);
+    M2TS_to_TS(in_filename, log_file, &error_count, &skip_count, buffer);
 
     // new errors during processing this M2TS file
     if ( (error_count != previous_error_count) || (skip_count != previous_skip_count) )
@@ -272,14 +306,14 @@ int main()
       fprintf(log_file, "========================================\n\n");
     }
     files_count_in++;
-	} while(1);
+  } while(1);
 /*   ==========  END OF MAIN PROCESSING LOOP (Process other M2TS files) =============   */
 
 MTS_FILES:
-	_findclose(search_handle);
+  _findclose(search_handle);
 
 /*   ==========   Process the first MTS file   =============   */
-	search_handle = _findfirst("*.mts", &ffblk);  /* search for the first MTS file */
+  search_handle = _findfirst("*.mts", &ffblk);  /* search for the first MTS file */
   if (search_handle == -1)  // error occurred
   {
     _get_errno(&err);
@@ -305,7 +339,7 @@ MTS_FILES:
   }
 
   strcpy(in_filename, ffblk.name);
-  M2TS_to_TS(in_filename, log_file, &error_count, &skip_count);
+  M2TS_to_TS(in_filename, log_file, &error_count, &skip_count, buffer);
   previous_error_count = error_count;
   previous_skip_count = skip_count;
   files_count_in++;
@@ -331,7 +365,7 @@ MTS_FILES:
     }
 
     strcpy(in_filename, ffblk.name);
-    M2TS_to_TS(in_filename, log_file, &error_count, &skip_count);
+    M2TS_to_TS(in_filename, log_file, &error_count, &skip_count, buffer);
 
     // new errors during processing this MTS file
     if ( (error_count != previous_error_count) || (skip_count != previous_skip_count) )
@@ -342,22 +376,29 @@ MTS_FILES:
       fprintf(log_file, "========================================\n\n");
     }
     files_count_in++;
-	} while(1);
+  } while(1);
 /*   ==========  END OF MAIN PROCESSING LOOP (Process other MTS files) =============   */
 
 CLEAN_UP:
-	_findclose(search_handle);
+  _findclose(search_handle);
 
 
 /*   ==========   Summarize the task and end the program   =============   */
-	printf("\n =====   ALL DONE!   =====\n");
-	printf("\nProcessed %u files.", files_count_in);
-	printf("\n%u ERROR(s), %u files are skipped.\n", error_count, skip_count);
+  printf("\n =====   ALL DONE!   =====\n");
+  printf("\nProcessed %u file(s).", files_count_in);
+  printf("\n%u ERROR(s), %u file(s) are skipped.\n", error_count, skip_count);
 
-	fprintf(log_file, "\nProcessed %u files.", files_count_in);
-	fprintf(log_file, "\n%u ERROR(s), %u files are skipped.\n", error_count, skip_count);
+  fprintf(log_file, "\nProcessed %u file(s).", files_count_in);
+  fprintf(log_file, "\n%u ERROR(s), %u file(s) are skipped.\n", error_count, skip_count);
 
-	fclose(log_file);
+  if (buffer != NULL)
+  {
+    free(buffer);
+    buffer = NULL;
+  }
+
+clean_up_end:
+  fclose(log_file);
   log_file = NULL;
 
   return 0;
