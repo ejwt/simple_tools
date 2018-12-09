@@ -112,6 +112,14 @@ static void show_available_format_string(void)
 }
 
 
+static void print_hhmmss_position(FILE *fp, uint32_t frame_No, double frame_rate)
+{
+  double s = (double)frame_No/frame_rate;
+  uint32_t hh = ((uint32_t)s)/3600;  /* hours */
+  uint32_t mm = ((uint32_t)s)/60 - 60*hh;  /* minutes */
+  s = s - hh*3600.0 - mm*60.0;  /* seconds */
+  fprintf(fp, "[frame %u] %02u:%02u:%06.3f", frame_No, hh, mm, s);
+}
 
 int main(int argc, char *argv[])
 {
@@ -129,7 +137,8 @@ int main(int argc, char *argv[])
 	uint32_t  u32_width = 0;    /* width in luma pixels */
 	uint32_t  u32_height = 0;   /* height in luma pixels */
   double  APL_threshold = 0.0;
-
+  double  frame_rate = 0.0;
+  uint8_t is_dark_scene = 0;
   uint32_t  x = 0;    /* x coordinate */
   uint32_t  y = 0;    /* y coordinate */
 /*
@@ -185,6 +194,11 @@ int main(int argc, char *argv[])
 			i++;
 			APL_threshold = atof(argv[i]);
 		}
+		else if( (strcmp("-fps", argv[i]) == 0) && (i < argc - 1) )
+		{
+			i++;
+			frame_rate = atof(argv[i]);
+		}
 		else
 		{
 		  printf("\nUnsupported argument %s\n", argv[i]);
@@ -194,7 +208,7 @@ int main(int argc, char *argv[])
 	}
 
 /*==============  Forming output filename ==========  */
-  make_filenames(input_filename, APL_filename, "_APL.txt");
+  make_filenames(input_filename, APL_filename, "_APL.csv");
   make_filenames(input_filename, result_filename, "_result.txt");
 
 /*=============== Open the files ============ */
@@ -260,8 +274,26 @@ int main(int argc, char *argv[])
       fread(frame_buffer, 1, (u32_width*u32_height)<<1, fp_input);
     }
 
+    /* Calculate APL and update *_APL.txt */
     apl = ((double)u32_Y_sum) / ((double)(u32_width*u32_height));
     fprintf(fp_out_APL, "%u, %.2f\n", frame_No, apl);
+
+    /* Detect dark scene and update *_result.txt */
+    if ( (apl <= APL_threshold) && (is_dark_scene == 0) )  /* Change from non-dark scene to dark scene */
+    {
+      is_dark_scene = 1;
+      fprintf(fp_out_result, "Dark scene starts at ");
+      print_hhmmss_position(fp_out_result, frame_No, frame_rate);
+    }
+
+    if ( (apl > APL_threshold) && (is_dark_scene == 1) )  /* Change from dark scene to non-dark scene */
+    {
+      is_dark_scene = 0;
+      fprintf(fp_out_result, ", ends at ");
+      print_hhmmss_position(fp_out_result, frame_No-1, frame_rate);
+      fprintf(fp_out_result, "\n");
+    }
+    
     frame_No++;
   }
   

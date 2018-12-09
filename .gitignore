@@ -44,6 +44,7 @@ Session.vim
 
 # Build results
 [Dd]ebugPublic/
+[Dd]ebug/
 [Rr]elease/
 [Rr]eleases/
 x64/
