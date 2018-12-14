@@ -6,10 +6,10 @@
 * Abstract: The program detects dark scenes in a YUV file.
 *
 * Usage: dark_scene_detect <-i input_filename> [-f file_format] <-w width> <-h height>
-          <-t APL_detect_threshold> <-fps frames_per_second>
+          <-fps frames_per_second> <-t APL_detect_threshold> [-d duration_in_seconds]
 *
-* Current version: 1.0
-* Last Modified: 2018-12-6
+* Current version: 1.1
+* Last Modified: 2018-12-14
 */
 
 
@@ -18,19 +18,38 @@
 #include <string.h>
 #include <stdint.h>
 
-static uint8_t  input_filename[384];
-static uint8_t  APL_filename[384];
-static uint8_t  result_filename[384];
+static int8_t  input_filename[384];
+static int8_t  APL_filename[384];
+static int8_t  result_filename[384];
 
 #define  MAX_WIDTH   1920
 #define  MAX_HEIGHT  1088
 
 
+static void show_available_format_string(void)
+{
+  printf("  The following YUV file formats have been implemented.\n");
+  printf("    yuv420p - 4:2:0, 8 bpc, planar YUV file (default)\n");
+  printf("    yuv422p - 4:2:2, 8 bpc, planar YUV file\n");
+  printf("    yuv444p - 4:4:4, 8 bpc, planar YUV file\n");
+}
+
+
 static void usage(char *program)
 {
-  printf("\nThe program detects dark scenes in a YUV file.\n");
-  printf("\nUsage: %s <-i input_filename> [-f file_format] <-w width> <-h height> <-t APL_detect_threshold> <-fps frames_per_second>\n", program);
-  printf("\nExample: dark_scene_detect -i movie.yuv -f yuv420p -w 1280 -h 720 -t 5 -fps 29.97\n", program);
+  printf("The program detects dark scenes in a YUV file.\n");
+  printf("\nUsage: %s <-i input_filename> [-f file_format] <-w width> <-h height> <-fps frames_per_second> <-t APL_detect_threshold> [-d duration_in_seconds]\n", program);
+  printf("\nExample: %s -i movie.yuv -f yuv420p -w 1280 -h 720 -fps 29.97 -t 20 -d 2.5\n", program);
+  
+  printf("\ninput_filename: filename of the YUV file, with or without the full path\n");
+  printf("file_format:\n");
+  show_available_format_string();
+  printf("width: picture width in luma pixels (integer)\n");
+  printf("height: picture height in luma lines (integer)\n");
+  printf("frames_per_second: frame rate in frames per second (float)\n");
+  printf("APL_detect_threshold: When APL is lower than or equal to this threshold, it is considered a dark scene. (float)\n");
+  printf("duration_in_seconds: Only when the dark scene duration is greater than this many seconds, the dark scenes are logged in *_result.txt file (float)\n");
+  printf("  default = 0.0, which means even dark scene as short as 1 frame is loggged.\n");
 }
 
 
@@ -45,7 +64,7 @@ static void make_filenames(char *in_filename, char *out_filename, char *append_n
   }
   j = i; /* record the position of the end of filename */
 
-  while ( (in_filename[i] != '.') && (i>0) )
+  while ( (in_filename[i] != '.') && (i > 0) )
   {
     i--;
   }
@@ -60,17 +79,17 @@ static void make_filenames(char *in_filename, char *out_filename, char *append_n
     out_filename[k] = in_filename[k];
   }
 
-  out_filename[k] = '\0';
+  out_filename[k] = '\0';  /* terminate the out_filename[] string */
   strcat(out_filename, append_name);
 }
 
 
 /* modify a character string, changes all letters to lower case */
-static void MakeLower(unsigned char *p)
+static void MakeLower(char *p)
 {
   for(; *p; p++)
   {
-    if (*p >= 'A' && *p <= 'Z')
+    if ( (*p >= 'A') && (*p <= 'Z') )
     {
       *p += 0x20;
     }
@@ -78,9 +97,9 @@ static void MakeLower(unsigned char *p)
 }
 
 
-static char get_ID_from_format_string(char *format_string, char *ID)
+static int8_t get_ID_from_format_string(int8_t *format_string, int8_t *ID)
 {
-  char  invalid_id = 1;
+  int8_t  invalid_id = 1;
 
   MakeLower(format_string);  
 
@@ -103,15 +122,8 @@ static char get_ID_from_format_string(char *format_string, char *ID)
   return  invalid_id;
 }
 
-static void show_available_format_string(void)
-{
-  printf("\n  The following YUV file format has been implemented.\n");
-  printf("    yuv420p - 4:2:0, 8 bpc, planar YUV file\n");
-  printf("    yuv422p - 4:2:2, 8 bpc, planar YUV file\n");
-  printf("    yuv444p - 4:4:4, 8 bpc, planar YUV file\n");
-}
 
-
+/* print time in hh:mm:ss.ms format */
 static void print_hhmmss_position(FILE *fp, uint32_t frame_No, double frame_rate)
 {
   double s = (double)frame_No/frame_rate;
