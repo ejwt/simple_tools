@@ -3,6 +3,7 @@
 *.i
 *.bin
 *.xfu
+*.user
 
 # Source Insight files
 *.IAB
