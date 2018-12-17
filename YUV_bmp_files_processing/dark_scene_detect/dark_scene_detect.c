@@ -279,12 +279,12 @@ int main(int argc, char *argv[])
   }
 
 /*=============== calculates the sum of luma component (Y) ============ */
-  while (1)
+  while ( !feof(fp_input) )
   {
     fread(frame_buffer, 1, u32_width*u32_height, fp_input);
     if (feof(fp_input))
     {
-      break;
+      goto END_OF_FILE;
     }
 
     u8_buffer = frame_buffer;
@@ -319,6 +319,11 @@ int main(int argc, char *argv[])
       goto CLEAN_UP;
     }
 
+    if (feof(fp_input))
+    {
+      goto END_OF_FILE;
+    }
+
     /* Calculate APL and update *_APL.txt */
     apl = ((double)u32_Y_sum) / ((double)(u32_width*u32_height));
     fprintf(fp_out_APL, "%u, %.2f\n", frame_No, apl);
@@ -341,6 +346,7 @@ int main(int argc, char *argv[])
 
     if ( (apl > APL_threshold) && (is_dark_scene == 1) )  /* Change from dark scene to non-dark scene */
     {
+END_OF_FILE:
       is_dark_scene = 0;
       memset(temp_str1, 0x00, sizeof(temp_str1));
       sprintf(temp_str1, ", ends at ");
