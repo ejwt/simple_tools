@@ -269,7 +269,7 @@ int main(int argc, char *argv[])
   }
 
 /*=============== Allocate the frame buffer ============ */
-  if ( NULL == (frame_buffer = malloc(u32_width*u32_height)) )  // 8 bpc, luma only
+  if ( NULL == (frame_buffer = (uint8_t *)malloc(u32_width*u32_height)) )  // 8 bpc, luma only
   {
     printf("Error! Frame buffer allocation failed!\n");
     fclose(fp_input);
@@ -279,11 +279,15 @@ int main(int argc, char *argv[])
   }
 
 /*=============== calculates the sum of luma component (Y) ============ */
-  while ( !feof(fp_input) )
+  while (1)
   {
     fread(frame_buffer, 1, u32_width*u32_height, fp_input);
-    u8_buffer = frame_buffer;
+    if (feof(fp_input))
+    {
+      break;
+    }
 
+    u8_buffer = frame_buffer;
     u32_Y_sum = 0;  /* clear this accumulator at the beginning of each frame */
 
     for (y=0; y<u32_height; y++)
@@ -324,10 +328,6 @@ int main(int argc, char *argv[])
     {
       dark_scene_frames++;
     }
-    else
-    {
-      dark_scene_frames = 0;
-    }
 
     if ( (apl <= APL_threshold) && (is_dark_scene == 0) )  /* Change from non-dark scene to dark scene */
     {
@@ -355,6 +355,8 @@ int main(int argc, char *argv[])
       {
         fprintf(fp_out_result, temp_str0);
       }
+
+      dark_scene_frames = 0;
     }
 
     frame_No++;
