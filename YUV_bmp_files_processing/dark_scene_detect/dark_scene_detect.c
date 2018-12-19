@@ -133,7 +133,7 @@ static int8_t get_ID_from_format_string(int8_t *format_string, uint8_t *ID)
 /* print time in hh:mm:ss.ms format */
 static void print_hhmmss_position(uint8_t *str, uint32_t frame_No, double frame_rate)
 {
-  double s = (double)frame_No/frame_rate;
+  double s = ((double)frame_No)/frame_rate;
   uint32_t hh = ((uint32_t)s)/3600;  /* hours */
   uint32_t mm = ((uint32_t)s)/60 - 60*hh;  /* minutes */
   s = s - hh*3600.0 - mm*60.0;  /* seconds */
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
                                 10-bit luma data: 255.75*3840*2160 = 2,121,292,800 < ( 2^32 - 1)
                                 which can fit into uint32_t */
                              /* To support higher resolutions in the future, we must use uint64_t */
-  double  apl;  /* Average Picture Level; 0.0 ~ 255.75; for more than 8-bit samples, (n-8) bits are treated as fraction */
+  double  apl = 0.0;  /* Average Picture Level; 0.0 ~ 255.75; for more than 8-bit samples, (n-8) bits are treated as fraction */
   uint32_t  u32_width = 0;    /* width in luma pixels */
   uint32_t  u32_height = 0;   /* height in luma lines */
   double  frame_rate = 0.0;
