@@ -1,15 +1,15 @@
 /*
-* Copyleft (c) 2016-2019  Fu Xing (Andy)
+* Copyleft (c) 2018-20xx  Fu Xing (Andy)
 * Author: Fu Xing
 *
 * File name: still_scene_detect.c
-* Abstract: The program detects dark scenes in a YUV file.
+* Abstract: The program detects still scenes in a YUV file.
 *
 * Usage: still_scene_detect <-i input_filename> [-f file_format] <-w width> <-h height>
           <-fps frames_per_second> <-t activity_threshold> [-d duration_in_seconds]
 *
 * Current version: 0.1
-* Last Modified: 2018-12-17
+* Last Modified: 2018-12-19
 */
 
 
@@ -18,8 +18,10 @@
 #include <string.h>
 #include <stdint.h>
 
+#define ABS(x)  ( ((x)>0) ? ((x)) : (-(x)) )
+
 static int8_t  input_filename[384];
-static int8_t  APL_filename[384];
+static int8_t  activity_filename[384];
 static int8_t  result_filename[384];
 static int8_t  temp_str0[256], temp_str1[256];
 
@@ -28,6 +30,7 @@ static int8_t  temp_str0[256], temp_str1[256];
    8-bit luma data: 255*3840*2160 = 2,115,072,000 < (2^32 - 1)
   10-bit luma data: 255.75*1920*1088 = 534,251,520 < (2^32 - 1)
   10-bit luma data: 255.75*3840*2160 = 2,121,292,800 < (2^32 - 1)
+  Frame activity weight: Y-6/8, Cb-1/8, Cr-1/8.
 */
 #define  MAX_WIDTH   3840
 #define  MAX_HEIGHT  2160
@@ -44,9 +47,9 @@ static void show_available_format_string(void)
 
 static void usage(char *program)
 {
-  printf("The program detects dark scenes in a YUV file.\n");
-  printf("\nUsage: %s <-i input_filename> [-f file_format] <-w width> <-h height> <-fps frames_per_second> <-t APL_detect_threshold> [-d duration_in_seconds]\n", program);
-  printf("\nExample: %s -i movie.yuv -f yuv420p -w 1280 -h 720 -fps 29.97 -t 20 -d 2.5\n", program);
+  printf("The program detects still scenes in a YUV file.\n");
+  printf("\nUsage: %s <-i input_filename> [-f file_format] <-w width> <-h height> <-fps frames_per_second> <-t activity_threshold> [-d duration_in_seconds]\n", program);
+  printf("\nExample: %s -i movie.yuv -f yuv420p -w 1280 -h 720 -fps 29.97 -t 10 -d 1.5\n", program);
 
   printf("\ninput_filename: filename of the YUV file, with or without the full path\n");
   printf("file_format:\n");
@@ -54,9 +57,9 @@ static void usage(char *program)
   printf("width: picture width in luma pixels (integer)\n");
   printf("height: picture height in luma lines (integer)\n");
   printf("frames_per_second: frame rate in frames per second (float)\n");
-  printf("APL_detect_threshold: When APL is lower than or equal to this threshold, it is considered a dark scene. (float, 0.0 ~ 255.75)\n");
-  printf("duration_in_seconds: Only when the dark scene duration is greater than this many seconds, the dark scenes are logged in *_result.txt file (float)\n");
-  printf("  default = 0.0, which means even dark scene as short as 1 frame is loggged.\n");
+  printf("activity_threshold: When frame activity is lower than or equal to this threshold, it is considered a still scene. (float, 0.0 ~ 255.75)\n");
+  printf("duration_in_seconds: Only when the still scene duration is greater than this many seconds, the still scenes are logged in *_result.txt file (float)\n");
+  printf("  default = 0.0, which means even still scene as short as 1 frame is loggged.\n");
 }
 
 
@@ -133,54 +136,118 @@ static int8_t get_ID_from_format_string(int8_t *format_string, uint8_t *ID)
 /* print time in hh:mm:ss.ms format */
 static void print_hhmmss_position(uint8_t *str, uint32_t frame_No, double frame_rate)
 {
-  double s = (double)frame_No/frame_rate;
+  double s = ((double)frame_No)/frame_rate;
   uint32_t hh = ((uint32_t)s)/3600;  /* hours */
   uint32_t mm = ((uint32_t)s)/60 - 60*hh;  /* minutes */
   s = s - hh*3600.0 - mm*60.0;  /* seconds */
   sprintf(str, "[frame %u] %02u:%02u:%06.3f", frame_No, hh, mm, s);
 }
 
+
+/* calculate the activity and update *_activity.csv */
+static double calculate_activity(FILE *fp_log, uint8_t *buffer_A, uint8_t *buffer_B, uint32_t width, uint32_t height, uint8_t format_id)
+{
+  uint8_t  *pA, *pB;
+  double  Y_activity = 0.0;   /* the average activity of luma component (Y) in a frame; 0.0 ~ 255.75 */
+  double  Cb_activity = 0.0;  /* the average activity of Cb component in a frame; 0.0 ~ 255.75 */
+  double  Cr_activity = 0.0;  /* the average activity of Cr component in a frame; 0.0 ~ 255.75 */
+  double  frame_activity = 0.0;   /* the average activity of the whole frame; 0.0 ~ 255.75; frame activity weight: Y-6/8, Cb-1/8, Cr-1/8 */
+
+  uint32_t  u32_Y_act = 0;   /* the accumulated activity of luma component (Y) in a frame */
+  uint32_t  u32_Cb_act = 0;  /* the accumulated activity of Cb component in a frame */
+  uint32_t  u32_Cr_act = 0;  /* the accumulated activity of Cr component in a frame */
+  uint32_t  u32_frame_act = 0;   /* the accumulated activity of the whole frame; frame activity weight: Y-6/8, Cb-1/8, Cr-1/8 */
+
+  uint32_t  i = 0;    /* counter */
+  uint32_t  chroma_size = 0;    /* the number of bytes of ONE chroma component (8 bpc) */
+
+  // luma
+  pA = buffer_A;
+  pB = buffer_B;
+  for (i=0; i<width*height; i++)
+  {
+    u32_Y_act += ABS(*pA - *pB);
+    pA++;
+    pB++;
+  }
+
+  // chroma
+  if (format_id == 0)  /* YCbCr 4:2:0 */
+  {
+    chroma_size = width * height / 4;
+  }
+  else if (format_id == 1) /* YCbCr 4:2:2 */
+  {
+    chroma_size = width * height / 2;
+  }
+  else if (format_id == 2) /* YCbCr 4:4:4 */
+  {
+    chroma_size = width * height;
+  }
+  else
+  {
+    printf("Internal ERROR 2\n");
+    exit(-10);
+  }
+
+  for (i=0; i<chroma_size; i++)
+  {
+    u32_Cb_act += ABS(*pA - *pB);
+    pA++;
+    pB++;
+  }
+
+  for (i=0; i<chroma_size; i++)
+  {
+    u32_Cr_act += ABS(*pA - *pB);
+    pA++;
+    pB++;
+  }
+
+  u32_frame_act += ((u32_Y_act + 4) >> 3) * 6;
+  u32_frame_act += ((u32_Cb_act + 4) >> 3);
+  u32_frame_act += ((u32_Cr_act + 4) >> 3);
+
+  Y_activity = ((double)u32_Y_act)/((double)(width*height));
+  Cb_activity = ((double)u32_Cb_act)/((double)chroma_size);
+  Cr_activity = ((double)u32_Cr_act)/((double)chroma_size);
+  frame_activity = ((double)u32_frame_act)/((double)(width*height));
+
+  // update *_activity.csv
+  fprintf(fp_log, "%.2f, %.2f, %.2f, %.2f\n", Y_activity, Cb_activity, Cr_activity, frame_activity);
+
+  return  frame_activity;
+}
+
+
+
+
 int main(int argc, char *argv[])
 {
   int32_t  i;  /* argument index */
-  uint8_t  *frame_buffer;  /* for storing one frame of luma data */
-  uint8_t  *u8_buffer;     /* for storing one byte of luma data */
+  uint8_t  *frame_buffer;  /* for storing 2 frames of YCbCr data */
+  uint8_t  *buffer_base[2];  /* pointing to the base addresses of the frames to be compared (to calculate activity) */
   uint8_t   format_id = 0;  /* YUV format ID; 0=yuv420p, 1=yuv422p, 2=yuv444p, ... */
   uint32_t  frame_No = 0;  /* frame number, counts from 0 */
 
-  uint32_t  u32_Y_sum = 0;   /* the sum of luma component (Y) in a frame;
-                                8-bit luma data: 255*3840*2160 = 2,115,072,000 < ( 2^32 - 1)
-                                10-bit luma data: 255.75*3840*2160 = 2,121,292,800 < ( 2^32 - 1)
-                                which can fit into uint32_t */
-                             /* To support higher resolutions in the future, we must use uint64_t */
-  double  apl;  /* Average Picture Level; 0.0 ~ 255.75; for more than 8-bit samples, (n-8) bits are treated as fraction */
+  double  frame_activity = 0.0;   /* the average activity of the whole frame; 0.0 ~ 255.75; frame activity weight: Y-6/8, Cb-1/8, Cr-1/8 */
+
   uint32_t  u32_width = 0;    /* width in luma pixels */
   uint32_t  u32_height = 0;   /* height in luma lines */
-  double  frame_rate = 0.0;
-  double  APL_threshold = 0.0;
+  uint32_t  buffer_size = 0;  /* buffer size in bytes */
+  double    frame_rate = 0.0;
+  double    activity_threshold = 0.0;
   double    duration_threshold_s = 0.0;    /* in seconds */
   uint32_t  duration_threshold_frame = 0;  /* in frames */
-  uint32_t  dark_scene_frames = 0;  /* in frames */
-  uint8_t is_dark_scene = 0;  /* dark scene flag */
-  uint32_t  x = 0;    /* x coordinate */
-  uint32_t  y = 0;    /* y coordinate */
-/*
-  -----------> x
-  |
-  |
-  |
-  |
-  V
+  uint32_t  still_scene_frames = 0;        /* in frames */
+  uint8_t   is_still_scene = 0;  /* still scene flag */
 
-  y
-*/
-
-  FILE    *fp_input, *fp_out_APL, *fp_out_result;
+  FILE    *fp_input, *fp_out_activity, *fp_out_result;
 
 /*   ==========   Command line parsing   =============   */
   if ( (argc != 15) && (argc != 13) && (argc != 11) )
   {
-    printf("\nThe number of parameters is WRONG!\n");
+    printf("\nThe number of parameters is incorrect!\n");
     usage(argv[0]);
     exit(-1);
   }
@@ -199,7 +266,7 @@ int main(int argc, char *argv[])
       {
         printf("\nThe YUV file format %s is NOT supported!\n", argv[i]);
         show_available_format_string();
-        exit(-1);
+        exit(-2);
       }
     }
     else if( (strcmp("-w", argv[i]) == 0) && (i < argc - 1) )
@@ -220,7 +287,7 @@ int main(int argc, char *argv[])
     else if( (strcmp("-t", argv[i]) == 0) && (i < argc - 1) )
     {
       i++;
-      APL_threshold = atof(argv[i]);
+      activity_threshold = atof(argv[i]);
     }
     else if( (strcmp("-d", argv[i]) == 0) && (i < argc - 1) )
     {
@@ -232,122 +299,115 @@ int main(int argc, char *argv[])
     {
       printf("\nUnsupported argument %s\n", argv[i]);
       usage(argv[0]);
-      exit(-1);
+      exit(-3);
     }
   }
 
   if (u32_width*u32_height > MAX_WIDTH*MAX_HEIGHT)
   {
     printf("\nERROR! Resolution %ux%u is too high, current program does NOT support it.\n", u32_width, u32_height);
-    exit(-1);
+    exit(-4);
   }
 
 /*==============  Forming output filename ==========  */
-  make_filenames(input_filename, APL_filename, "_APL.csv");
+  make_filenames(input_filename, activity_filename, "_activity.csv");
   make_filenames(input_filename, result_filename, "_result.txt");
 
 /*=============== Open the files ============ */
   if ( NULL == (fp_input= fopen(input_filename, "rb")) )
   {
     printf("Error! Can't open file %s\n", input_filename);
-    exit(-1);
+    exit(-5);
   }
 
-  if ( NULL == (fp_out_APL = fopen(APL_filename, "w")) )
+  if ( NULL == (fp_out_activity = fopen(activity_filename, "w")) )
   {
-    printf("Error! Can't create file %s\n", APL_filename);
+    printf("Error! Can't create file %s\n", activity_filename);
     fclose(fp_input);
-    exit(-1);
+    exit(-6);
   }
 
   if ( NULL == (fp_out_result = fopen(result_filename, "w")) )
   {
     printf("Error! Can't create file %s\n", result_filename);
     fclose(fp_input);
-    fclose(fp_out_APL);
-    exit(-1);
+    fclose(fp_out_activity);
+    exit(-7);
   }
 
-/*=============== Allocate the frame buffer ============ */
-  if ( NULL == (frame_buffer = (uint8_t *)malloc(u32_width*u32_height)) )  // 8 bpc, luma only
+/*=============== Allocate the frame buffer: 8 bpc, luma + chroma, 2 frames ============ */
+  if (format_id == 0)  /* YCbCr 4:2:0 */
+  {
+    buffer_size = u32_width * u32_height * 3;  /* 1.5*2 */
+  }
+  else if (format_id == 1) /* YCbCr 4:2:2 */
+  {
+    buffer_size = u32_width * u32_height * 4;  /* 2*2 */
+  }
+  else if (format_id == 2) /* YCbCr 4:4:4 */
+  {
+    buffer_size = u32_width * u32_height * 6;  /* 3*2 */
+  }
+  else
+  {
+    printf("Internal ERROR 1\n");
+    fclose(fp_input);
+    fclose(fp_out_activity);
+    fclose(fp_out_result);
+    exit(-8);
+  }
+
+  if ( NULL == (frame_buffer = (uint8_t *)malloc(buffer_size)) )
   {
     printf("Error! Frame buffer allocation failed!\n");
     fclose(fp_input);
-    fclose(fp_out_APL);
+    fclose(fp_out_activity);
     fclose(fp_out_result);
-    exit(-1);
+    exit(-9);
   }
 
-/*=============== calculates the sum of luma component (Y) ============ */
+  buffer_base[0] = frame_buffer;
+  buffer_base[1] = frame_buffer + buffer_size/2;
+
+  // print *_activity.csv header line
+  fprintf(fp_out_activity, "frame_No, Y_activity, Cb_activity, Cr_activity, frame_activity\n");
+
+/*=============== calculates the activities ============ */
   while ( !feof(fp_input) )
   {
-    fread(frame_buffer, 1, u32_width*u32_height, fp_input);
+    fread(buffer_base[frame_No&1], 1, buffer_size/2, fp_input);
     if (feof(fp_input))
     {
       goto END_OF_FILE;
     }
 
-    u8_buffer = frame_buffer;
-    u32_Y_sum = 0;  /* clear this accumulator at the beginning of each frame */
-
-    for (y=0; y<u32_height; y++)
+    /* Calculate the activities and update *_activity.txt */
+    if (frame_No > 0)
     {
-      for (x=0; x<u32_width; x++)
-      {
-        u32_Y_sum += *u8_buffer;
-        u8_buffer++;
-      }
+      fprintf(fp_out_activity, "%u, ", frame_No);
+      frame_activity = calculate_activity(fp_out_activity, buffer_base[0], buffer_base[1], u32_width, u32_height, format_id);
     }
 
-    /* skip chroma samples */
-    if (format_id == 0)  /* YCbCr 4:2:0 */
+    /* Detect still scene and update *_result.txt */
+    if ( frame_activity <= activity_threshold )
     {
-      fread(frame_buffer, 1, (u32_width*u32_height)>>1, fp_input);
-    }
-    else if (format_id == 1)  /* YCbCr 4:2:2 */
-    {
-      fread(frame_buffer, 1, u32_width*u32_height, fp_input);
-    }
-    else if (format_id == 2)  /* YCbCr 4:4:4 */
-    {
-      fread(frame_buffer, 1, u32_width*u32_height, fp_input);
-      fread(frame_buffer, 1, u32_width*u32_height, fp_input);
-    }
-    else
-    {
-      printf("Internal error!\n");
-      goto CLEAN_UP;
+      still_scene_frames++;
     }
 
-    if (feof(fp_input))
+    if ( (frame_activity <= activity_threshold) && (is_still_scene == 0) )  /* Change from non-still scene to still scene */
     {
-      goto END_OF_FILE;
-    }
-
-    /* Calculate APL and update *_APL.txt */
-    apl = ((double)u32_Y_sum) / ((double)(u32_width*u32_height));
-    fprintf(fp_out_APL, "%u, %.2f\n", frame_No, apl);
-
-    /* Detect dark scene and update *_result.txt */
-    if ( apl <= APL_threshold )
-    {
-      dark_scene_frames++;
-    }
-
-    if ( (apl <= APL_threshold) && (is_dark_scene == 0) )  /* Change from non-dark scene to dark scene */
-    {
-      is_dark_scene = 1;
+      is_still_scene = 1;
       memset(temp_str0, 0x00, sizeof(temp_str0));
       memset(temp_str1, 0x00, sizeof(temp_str1));
-      sprintf(temp_str0, "Dark scene starts at ");
+      sprintf(temp_str0, "Still scene starts at ");
       print_hhmmss_position(temp_str1, frame_No, frame_rate);
       strcat(temp_str0, temp_str1);
     }
 
-    if ( (apl > APL_threshold) && (is_dark_scene == 1) )  /* Change from dark scene to non-dark scene */
+    if ( (frame_activity > activity_threshold) && (is_still_scene == 1) )  /* Change from still scene to non-still scene */
     {
 END_OF_FILE:
-      is_dark_scene = 0;
+      is_still_scene = 0;
       memset(temp_str1, 0x00, sizeof(temp_str1));
       sprintf(temp_str1, ", ends at ");
       strcat(temp_str0, temp_str1);
@@ -357,20 +417,19 @@ END_OF_FILE:
       strcat(temp_str0, temp_str1);
       strcat(temp_str0, "\n");
 
-      if (dark_scene_frames > duration_threshold_frame)
+      if (still_scene_frames > duration_threshold_frame)
       {
         fprintf(fp_out_result, temp_str0);
       }
 
-      dark_scene_frames = 0;
+      still_scene_frames = 0;
     }
 
     frame_No++;
   }
 
-CLEAN_UP:
   fclose(fp_input);
-  fclose(fp_out_APL);
+  fclose(fp_out_activity);
   fclose(fp_out_result);
 
   if (frame_buffer != NULL)
