@@ -278,6 +278,9 @@ int main(int argc, char *argv[])
     exit(-1);
   }
 
+  // print *_APL.csv header line
+  fprintf(fp_out_APL, "frame_No, APL\n");
+
 /*=============== calculates the sum of luma component (Y) ============ */
   while ( !feof(fp_input) )
   {
