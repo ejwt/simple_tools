@@ -156,7 +156,6 @@ static double calculate_activity(FILE *fp_log, uint8_t *buffer_A, uint8_t *buffe
   uint32_t  u32_Y_act = 0;   /* the accumulated activity of luma component (Y) in a frame */
   uint32_t  u32_Cb_act = 0;  /* the accumulated activity of Cb component in a frame */
   uint32_t  u32_Cr_act = 0;  /* the accumulated activity of Cr component in a frame */
-  uint32_t  u32_frame_act = 0;   /* the accumulated activity of the whole frame; frame activity weight: Y-6/8, Cb-1/8, Cr-1/8 */
 
   uint32_t  i = 0;    /* counter */
   uint32_t  chroma_size = 0;    /* the number of bytes of ONE chroma component (8 bpc) */
@@ -204,14 +203,10 @@ static double calculate_activity(FILE *fp_log, uint8_t *buffer_A, uint8_t *buffe
     pB++;
   }
 
-  u32_frame_act += ((u32_Y_act + 4) >> 3) * 6;
-  u32_frame_act += ((u32_Cb_act + 4) >> 3);
-  u32_frame_act += ((u32_Cr_act + 4) >> 3);
-
   Y_activity = ((double)u32_Y_act)/((double)(width*height));
   Cb_activity = ((double)u32_Cb_act)/((double)chroma_size);
   Cr_activity = ((double)u32_Cr_act)/((double)chroma_size);
-  frame_activity = ((double)u32_frame_act)/((double)(width*height));
+  frame_activity = Y_activity*0.75 + Cb_activity/8.0 + Cr_activity/8.0;
 
   // update *_activity.csv
   fprintf(fp_log, "%.2f, %.2f, %.2f, %.2f\n", Y_activity, Cb_activity, Cr_activity, frame_activity);
