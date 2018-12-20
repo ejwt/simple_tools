@@ -17,7 +17,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>  /* for pow() */
 
+#include "general_defines.h"
 #include "wav_header.h"
 
 static int8_t  input_filename[384];
@@ -35,6 +37,9 @@ static int8_t  temp_str0[256], temp_str1[256];
 #define  MAX_WIDTH   3840
 #define  MAX_HEIGHT  2160
 
+#define  WAV_SAMPLE_RATE  48000
+#define  WAV_BIT_DEPTH    16
+//#define  AV_RESYNC_INTERVAL  1000  // audio and video resync every this many video frames
 
 static void show_available_format_string(void)
 {
@@ -145,12 +150,16 @@ static void print_hhmmss_position(uint8_t *str, uint32_t frame_No, double frame_
 
 int main(int argc, char *argv[])
 {
-  int32_t  i;  /* argument index */
+  int32_t  i;  /* counter */
   uint8_t  *frame_buffer;  /* for storing one frame of luma data */
   uint8_t  *u8_buffer;     /* for storing one byte of luma data */
+  uint8_t  *wav_buffer;     /* for 1 second wav data */
+  uint32_t  audio_length = 0;
   uint8_t   format_id = 0;  /* YUV format ID; 0=yuv420p, 1=yuv422p, 2=yuv444p, ... */
-  uint32_t  frame_No = 0;  /* frame number, counts from 0 */
-
+  uint32_t  frame_No = 0;   /* YUV frame number, counts from 0 */
+  uint32_t  sample_No = 0;  /* audio sample number, counts from 0 */
+  uint32_t  sample_per_frame;  /* the number of audio samples per YUV frame */
+  
   uint32_t  u32_Y_sum = 0;   /* the sum of luma component (Y) in a frame;
                                 8-bit luma data: 255*3840*2160 = 2,115,072,000 < ( 2^32 - 1)
                                 10-bit luma data: 255.75*3840*2160 = 2,121,292,800 < ( 2^32 - 1)
@@ -181,12 +190,15 @@ int main(int argc, char *argv[])
   FILE    *fp_input;      /* input YUV file */
   FILE    *fp_out_APL;    /* APL log file *_APL.csv */
   FILE    *fp_out_result; /* final result file *_result.txt, listing the detected dark scenes */
-  FILE    *fp_out_wav;    /* *_visualization.wav file for data visualization; the length of the wave file is 2 seconds longer than the YUV file */
+  FILE    *fp_out_wav;    /* *_visualization.wav file for APL data visualization; 
+                             the length of the wave file is 2 seconds longer than the YUV file */
+  struct wav  wav_header;
+  double  scale_factor;  /* scale factor for visualizing the APL data */
 
 /*   ==========   Command line parsing   =============   */
   if ( (argc != 15) && (argc != 13) && (argc != 11) )
   {
-    printf("\nThe number of parameters is WRONG!\n");
+    printf("\nThe number of parameters is incorrect!\n");
     usage(argv[0]);
     exit(-1);
   }
@@ -248,13 +260,13 @@ int main(int argc, char *argv[])
     exit(-4);
   }
 
-/*==============  Forming output filename ==========  */
+/*==============  Forming output filenames ==========  */
   make_filenames(input_filename, APL_filename, "_APL.csv");
   make_filenames(input_filename, result_filename, "_result.txt");
   make_filenames(input_filename, wav_filename, "_visualization.wav");
 
 /*=============== Open the files ============ */
-  if ( NULL == (fp_input= fopen(input_filename, "rb")) )
+  if ( NULL == (fp_input = fopen(input_filename, "rb")) )
   {
     printf("Error! Can't open file %s\n", input_filename);
     exit(-5);
@@ -275,7 +287,7 @@ int main(int argc, char *argv[])
     exit(-7);
   }
 
-  if ( NULL == (fp_out_wav = fopen(wav_filename, "w")) )
+  if ( NULL == (fp_out_wav = fopen(wav_filename, "wb")) )
   {
     printf("Error! Can't create file %s\n", wav_filename);
     fclose(fp_input);
@@ -284,10 +296,10 @@ int main(int argc, char *argv[])
     exit(-8);
   }
 
-/*=============== Allocate the frame buffer ============ */
+/*=============== Allocate the buffers ============ */
   if ( NULL == (frame_buffer = (uint8_t *)malloc(u32_width*u32_height)) )  // 8 bpc, luma only
   {
-    printf("Error! Frame buffer allocation failed!\n");
+    printf("Error! YUV frame buffer allocation failed!\n");
     fclose(fp_input);
     fclose(fp_out_APL);
     fclose(fp_out_result);
@@ -295,8 +307,47 @@ int main(int argc, char *argv[])
     exit(-9);
   }
 
+  if ( NULL == (wav_buffer = (uint8_t *)malloc(WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8)) )
+  {
+    printf("Error! WAV buffer allocation failed!\n");
+    fclose(fp_input);
+    fclose(fp_out_APL);
+    fclose(fp_out_result);
+    fclose(fp_out_wav);
+    free(frame_buffer);
+    exit(-10);
+  }
+
   // print *_APL.csv header line
   fprintf(fp_out_APL, "frame_No, APL\n");
+
+/*=============== write wav file header ============ */
+  sample_per_frame = (uint32_t)(((double)WAV_SAMPLE_RATE)/frame_rate + 0.5);
+	wav_header.ChunkID = 0x46464952;   /* letters "RIFF" in ASCII form */
+	wav_header.ChunkSize = 36 + audio_length;  /* to be updated */
+	wav_header.Format = 0x45564157;       /* letters "WAVE" in ASCII form */
+
+	wav_header.Subchunk1ID = 0x20746d66;     /* letters "fmt " in ASCII form */
+	wav_header.Subchunk1Size = 16;
+	wav_header.AudioFormat = 1;
+	wav_header.NumChannels = 1;
+	wav_header.SampleRate = WAV_SAMPLE_RATE;
+	wav_header.ByteRate = WAV_SAMPLE_RATE * wav_header.NumChannels * WAV_BIT_DEPTH / 8;
+	wav_header.BlockAlign = wav_header.NumChannels * WAV_BIT_DEPTH / 8;
+	wav_header.BitsPerSample = WAV_BIT_DEPTH;
+
+	wav_header.Subchunk2ID = 0x61746164;      /* letters "data" in ASCII form */
+	wav_header.Subchunk2Size = audio_length;  /* to be updated */
+
+  fwrite(&wav_header, 44, 1, fp_out_wav);
+
+  // write 2 seconds muted audio, so that we can drag the wav file into a wav editor,
+  // and play it first. After 1.x seconds, play the video.
+  memset(wav_buffer, 0x00, WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8);
+  fwrite(wav_buffer, 1, WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8, fp_out_wav);
+  fwrite(wav_buffer, 1, WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8, fp_out_wav);
+
+  scale_factor = (pow(2.0, WAV_BIT_DEPTH) - 1.0) / 255.75 - 0.02; /* 0.02 is the margin */
 
 /*=============== calculates the sum of luma component (Y) ============ */
   while ( !feof(fp_input) )
@@ -347,6 +398,54 @@ int main(int argc, char *argv[])
     /* Calculate APL and update *_APL.txt */
     apl = ((double)u32_Y_sum) / ((double)(u32_width*u32_height));
     fprintf(fp_out_APL, "%u, %.2f\n", frame_No, apl);
+    
+    /* Update *_visualization.wav */
+    #if (WAV_BIT_DEPTH == 8)
+    {
+      memset(wav_buffer, (int8_t)((apl-128.0)*scale_factor+0.5), sample_per_frame);
+    }
+    #elif (WAV_BIT_DEPTH == 16)
+    {
+      int16_t  *p_sample = (int16_t *)wav_buffer;
+      int16_t  temp = (int16_t)((apl - 128.0) * scale_factor + 0.5);
+      for (i=0; i<(int32_t)sample_per_frame; i++)
+      {
+        *p_sample = temp;
+        p_sample++;
+      }
+    }
+    #elif (WAV_BIT_DEPTH == 32)
+    {
+      int32_t  *p_sample = (int32_t *)wav_buffer;
+      int32_t  temp = (int32_t)((apl - 128.0) * scale_factor + 0.5);
+      for (i=0; i<(int32_t)sample_per_frame; i++)
+      {
+        *p_sample = temp;
+        p_sample++;
+      }
+    }
+    #elif (WAV_BIT_DEPTH == 24)
+    {
+      int8_t  *p_sample = (int8_t *)wav_buffer;
+      int32_t  temp = (int32_t)((apl - 128.0) * scale_factor + 0.5);
+      for (i=0; i<(int32_t)sample_per_frame; i++)
+      {
+        *p_sample = temp & 0xFF;  /* assuming little endian */
+        p_sample++;
+        *p_sample = (temp >> 8) & 0xFF;
+        p_sample++;
+        *p_sample = (temp >> 16) & 0xFF;
+        p_sample++;
+      }
+    }
+    #else
+    {
+      #error "NOT implemented!";
+    }
+    #endif
+
+    fwrite(wav_buffer, 1, sample_per_frame*WAV_BIT_DEPTH/8, fp_out_wav);
+    sample_No += sample_per_frame;
 
     /* Detect dark scene and update *_result.txt */
     if ( apl <= APL_threshold )
@@ -387,6 +486,15 @@ END_OF_FILE:
 
     frame_No++;
   }
+
+/*=============== Update wav file header ============ */
+  audio_length = sample_No * WAV_BIT_DEPTH / 8;
+
+	wav_header.ChunkSize = 36 + audio_length;
+	wav_header.Subchunk2Size = audio_length;
+
+  fseek(fp_out_wav, 0, SEEK_SET);
+  fwrite(&wav_header, 44, 1, fp_out_wav);
 
 CLEAN_UP:
   fclose(fp_input);

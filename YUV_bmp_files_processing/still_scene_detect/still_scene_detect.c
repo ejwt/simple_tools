@@ -18,7 +18,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#define ABS(x)  ( ((x)>0) ? ((x)) : (-(x)) )
+#include "general_defines.h"
 
 static int8_t  input_filename[384];
 static int8_t  activity_filename[384];
@@ -304,12 +304,12 @@ int main(int argc, char *argv[])
     exit(-4);
   }
 
-/*==============  Forming output filename ==========  */
+/*==============  Forming output filenames ==========  */
   make_filenames(input_filename, activity_filename, "_activity.csv");
   make_filenames(input_filename, result_filename, "_result.txt");
 
 /*=============== Open the files ============ */
-  if ( NULL == (fp_input= fopen(input_filename, "rb")) )
+  if ( NULL == (fp_input = fopen(input_filename, "rb")) )
   {
     printf("Error! Can't open file %s\n", input_filename);
     exit(-5);
