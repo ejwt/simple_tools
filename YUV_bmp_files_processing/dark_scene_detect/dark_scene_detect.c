@@ -18,9 +18,12 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "wav_header.h"
+
 static int8_t  input_filename[384];
 static int8_t  APL_filename[384];
 static int8_t  result_filename[384];
+static int8_t  wav_filename[384];
 static int8_t  temp_str0[256], temp_str1[256];
 
 /* 2^32 - 1 = 4,294,967,295
@@ -175,7 +178,10 @@ int main(int argc, char *argv[])
   y
 */
 
-  FILE    *fp_input, *fp_out_APL, *fp_out_result;
+  FILE    *fp_input;      /* input YUV file */
+  FILE    *fp_out_APL;    /* APL log file *_APL.csv */
+  FILE    *fp_out_result; /* final result file *_result.txt, listing the detected dark scenes */
+  FILE    *fp_out_wav;    /* *_visualization.wav file for data visualization; the length of the wave file is 2 seconds longer than the YUV file */
 
 /*   ==========   Command line parsing   =============   */
   if ( (argc != 15) && (argc != 13) && (argc != 11) )
@@ -199,7 +205,7 @@ int main(int argc, char *argv[])
       {
         printf("\nThe YUV file format %s is NOT supported!\n", argv[i]);
         show_available_format_string();
-        exit(-1);
+        exit(-2);
       }
     }
     else if( (strcmp("-w", argv[i]) == 0) && (i < argc - 1) )
@@ -232,32 +238,33 @@ int main(int argc, char *argv[])
     {
       printf("\nUnsupported argument %s\n", argv[i]);
       usage(argv[0]);
-      exit(-1);
+      exit(-3);
     }
   }
 
   if (u32_width*u32_height > MAX_WIDTH*MAX_HEIGHT)
   {
     printf("\nERROR! Resolution %ux%u is too high, current program does NOT support it.\n", u32_width, u32_height);
-    exit(-1);
+    exit(-4);
   }
 
 /*==============  Forming output filename ==========  */
   make_filenames(input_filename, APL_filename, "_APL.csv");
   make_filenames(input_filename, result_filename, "_result.txt");
+  make_filenames(input_filename, wav_filename, "_visualization.wav");
 
 /*=============== Open the files ============ */
   if ( NULL == (fp_input= fopen(input_filename, "rb")) )
   {
     printf("Error! Can't open file %s\n", input_filename);
-    exit(-1);
+    exit(-5);
   }
 
   if ( NULL == (fp_out_APL = fopen(APL_filename, "w")) )
   {
     printf("Error! Can't create file %s\n", APL_filename);
     fclose(fp_input);
-    exit(-1);
+    exit(-6);
   }
 
   if ( NULL == (fp_out_result = fopen(result_filename, "w")) )
@@ -265,7 +272,16 @@ int main(int argc, char *argv[])
     printf("Error! Can't create file %s\n", result_filename);
     fclose(fp_input);
     fclose(fp_out_APL);
-    exit(-1);
+    exit(-7);
+  }
+
+  if ( NULL == (fp_out_wav = fopen(wav_filename, "w")) )
+  {
+    printf("Error! Can't create file %s\n", wav_filename);
+    fclose(fp_input);
+    fclose(fp_out_APL);
+    fclose(fp_out_result);
+    exit(-8);
   }
 
 /*=============== Allocate the frame buffer ============ */
@@ -275,7 +291,8 @@ int main(int argc, char *argv[])
     fclose(fp_input);
     fclose(fp_out_APL);
     fclose(fp_out_result);
-    exit(-1);
+    fclose(fp_out_wav);
+    exit(-9);
   }
 
   // print *_APL.csv header line
@@ -375,6 +392,7 @@ CLEAN_UP:
   fclose(fp_input);
   fclose(fp_out_APL);
   fclose(fp_out_result);
+  fclose(fp_out_wav);
 
   if (frame_buffer != NULL)
   {
