@@ -37,7 +37,7 @@ static int8_t  temp_str0[256], temp_str1[256];
 #define  MAX_WIDTH   3840
 #define  MAX_HEIGHT  2160
 
-#define  WAV_SAMPLE_RATE  48000
+#define  WAV_SAMPLE_RATE  8000
 #define  WAV_BIT_DEPTH    16
 //#define  AV_RESYNC_INTERVAL  1000  // audio and video resync every this many video frames
 
