@@ -1,5 +1,5 @@
 /*
-* Copyleft (c) 2016-2019  Fu Xing (Andy)
+* Copyleft (c) 2016-20xx  Fu Xing (Andy)
 * Author: Fu Xing
 *
 * File name: dark_scene_detect.c
@@ -9,7 +9,7 @@
           <-fps frames_per_second> <-t APL_detect_threshold> [-d duration_in_seconds]
 *
 * Current version: 1.1
-* Last Modified: 2018-12-14
+* Last Modified: 2018-12-21
 */
 
 
@@ -26,7 +26,7 @@ static int8_t  input_filename[384];
 static int8_t  APL_filename[384];
 static int8_t  result_filename[384];
 static int8_t  wav_filename[384];
-static int8_t  temp_str0[256], temp_str1[256];
+static int8_t  temp_str0[128], temp_str1[128];
 
 /* 2^32 - 1 = 4,294,967,295
    8-bit luma data: 255*1920*1088 = 532,684,800 < (2^32 - 1)
@@ -39,7 +39,6 @@ static int8_t  temp_str0[256], temp_str1[256];
 
 #define  WAV_SAMPLE_RATE  8000
 #define  WAV_BIT_DEPTH    16
-//#define  AV_RESYNC_INTERVAL  1000  // audio and video resync every this many video frames
 
 static void show_available_format_string(void)
 {
@@ -54,7 +53,7 @@ static void usage(char *program)
 {
   printf("The program detects dark scenes in a YUV file.\n");
   printf("\nUsage: %s <-i input_filename> [-f file_format] <-w width> <-h height> <-fps frames_per_second> <-t APL_detect_threshold> [-d duration_in_seconds]\n", program);
-  printf("\nExample: %s -i movie.yuv -f yuv420p -w 1280 -h 720 -fps 29.97 -t 20 -d 2.5\n", program);
+  printf("\nExample: %s -i movie.yuv -f yuv420p -w 1280 -h 720 -fps 29.97 -t 19.2 -d 2.5\n", program);
 
   printf("\ninput_filename: filename of the YUV file, with or without the full path\n");
   printf("file_format:\n");
@@ -150,52 +149,40 @@ static void print_hhmmss_position(uint8_t *str, uint32_t frame_No, double frame_
 
 int main(int argc, char *argv[])
 {
-  int32_t  i;  /* counter */
+  int32_t   i;  /* counter */
   uint8_t  *frame_buffer;  /* for storing one frame of luma data */
-  uint8_t  *u8_buffer;     /* for storing one byte of luma data */
-  uint8_t  *wav_buffer;     /* for 1 second wav data */
-  uint32_t  audio_length = 0;
-  uint8_t   format_id = 0;  /* YUV format ID; 0=yuv420p, 1=yuv422p, 2=yuv444p, ... */
+  uint8_t  *u8_buffer;     /* for storing one byte of luma data (the moving pointer) */
+  uint8_t  *wav_buffer;     /* for storing 1 second wav data */
+  uint32_t  audio_length = 0;  /* wav data length, in bytes */
+  uint8_t   format_id = 0;  /* YUV format ID: 0=yuv420p, 1=yuv422p, 2=yuv444p, ... */
   uint32_t  frame_No = 0;   /* YUV frame number, counts from 0 */
   uint32_t  sample_No = 0;  /* audio sample number, counts from 0 */
-  uint32_t  sample_per_frame;  /* the number of audio samples per YUV frame */
-  
+  uint32_t  samples_to_fill;   /* the number of audio samples to fill into the 1 second audio buffer */
+
   uint32_t  u32_Y_sum = 0;   /* the sum of luma component (Y) in a frame;
                                 8-bit luma data: 255*3840*2160 = 2,115,072,000 < ( 2^32 - 1)
                                 10-bit luma data: 255.75*3840*2160 = 2,121,292,800 < ( 2^32 - 1)
                                 which can fit into uint32_t */
                              /* To support higher resolutions in the future, we must use uint64_t */
-  double  apl = 0.0;  /* Average Picture Level; 0.0 ~ 255.75; for more than 8-bit samples, (n-8) bits are treated as fraction */
+  double    apl = 0.0;  /* Average Picture Level; 0.0 ~ 255.75; for more than 8-bit luma samples, the least significant (n-8) bits are treated as the fractional part */
   uint32_t  u32_width = 0;    /* width in luma pixels */
   uint32_t  u32_height = 0;   /* height in luma lines */
-  double  frame_rate = 0.0;
-  double  APL_threshold = 0.0;
+  double    frame_rate = 0.0;
+  double    APL_threshold = 0.0;  /* When APL is lower than or equal to this threshold, it is considered a dark scene. (0.0 ~ 255.75) */
   double    duration_threshold_s = 0.0;    /* in seconds */
   uint32_t  duration_threshold_frame = 0;  /* in frames */
-  uint32_t  dark_scene_frames = 0;  /* in frames */
-  uint8_t is_dark_scene = 0;  /* dark scene flag */
-  uint32_t  x = 0;    /* x coordinate */
-  uint32_t  y = 0;    /* y coordinate */
-/*
-  -----------> x
-  |
-  |
-  |
-  |
-  V
-
-  y
-*/
+  uint32_t  dark_scene_frames = 0;  /* detected consecutive dark scene frames */
+  uint8_t   is_dark_scene = 0;  /* dark scene flag */
+  uint32_t  offset = 0;    /* offset in bytes relative to the start of a YUV frame */
 
   FILE    *fp_input;      /* input YUV file */
   FILE    *fp_out_APL;    /* APL log file *_APL.csv */
   FILE    *fp_out_result; /* final result file *_result.txt, listing the detected dark scenes */
-  FILE    *fp_out_wav;    /* *_visualization.wav file for APL data visualization; 
-                             the length of the wave file is 2 seconds longer than the YUV file */
+  FILE    *fp_out_wav;    /* *_visualization.wav file for APL data visualization */
   struct wav  wav_header;
   double  scale_factor;  /* scale factor for visualizing the APL data */
 
-/*   ==========   Command line parsing   =============   */
+/* ============= Command line parsing ============= */
   if ( (argc != 15) && (argc != 13) && (argc != 11) )
   {
     printf("\nThe number of parameters is incorrect!\n");
@@ -224,26 +211,52 @@ int main(int argc, char *argv[])
     {
       i++;
       u32_width = atoi(argv[i]);
+      if (u32_width == 0)
+      {
+        printf("width = 0, illegal.\n");
+        exit(-11);
+      }
     }
     else if( (strcmp("-h", argv[i]) == 0) && (i < argc - 1) )
     {
       i++;
       u32_height = atoi(argv[i]);
+      if (u32_height == 0)
+      {
+        printf("height = 0, illegal.\n");
+        exit(-12);
+      }
     }
     else if( (strcmp("-fps", argv[i]) == 0) && (i < argc - 1) )
     {
       i++;
       frame_rate = atof(argv[i]);
+      if (frame_rate < 1.0)
+      {
+        printf("frame_rate lower than 1 fps is not supported.\n");
+        printf("To support it, we need to enlarge the wav buffer size (currently 1 second).\n");
+        exit(-13);
+      }
     }
     else if( (strcmp("-t", argv[i]) == 0) && (i < argc - 1) )
     {
       i++;
       APL_threshold = atof(argv[i]);
+      if ( (APL_threshold < 0.0) || (APL_threshold > 255.75) )
+      {
+        printf("APL_threshold is illegal. It shoule be 0.0 ~ 255.75.\n");
+        exit(-14);
+      }
     }
     else if( (strcmp("-d", argv[i]) == 0) && (i < argc - 1) )
     {
       i++;
       duration_threshold_s = atof(argv[i]);
+      if (duration_threshold_s < 0.0)
+      {
+        printf("duration_threshold_s is negative, illegal.\n");
+        exit(-15);
+      }
       duration_threshold_frame = (uint32_t)(duration_threshold_s * frame_rate + 0.5);
     }
     else
@@ -260,12 +273,12 @@ int main(int argc, char *argv[])
     exit(-4);
   }
 
-/*==============  Forming output filenames ==========  */
+/* =============  Forming output filenames ============= */
   make_filenames(input_filename, APL_filename, "_APL.csv");
   make_filenames(input_filename, result_filename, "_result.txt");
   make_filenames(input_filename, wav_filename, "_visualization.wav");
 
-/*=============== Open the files ============ */
+/* =============== Open the files ============ */
   if ( NULL == (fp_input = fopen(input_filename, "rb")) )
   {
     printf("Error! Can't open file %s\n", input_filename);
@@ -296,7 +309,7 @@ int main(int argc, char *argv[])
     exit(-8);
   }
 
-/*=============== Allocate the buffers ============ */
+/* =============== Allocate the buffers ============ */
   if ( NULL == (frame_buffer = (uint8_t *)malloc(u32_width*u32_height)) )  // 8 bpc, luma only
   {
     printf("Error! YUV frame buffer allocation failed!\n");
@@ -321,35 +334,28 @@ int main(int argc, char *argv[])
   // print *_APL.csv header line
   fprintf(fp_out_APL, "frame_No, APL\n");
 
-/*=============== write wav file header ============ */
-  sample_per_frame = (uint32_t)(((double)WAV_SAMPLE_RATE)/frame_rate + 0.5);
-	wav_header.ChunkID = 0x46464952;   /* letters "RIFF" in ASCII form */
-	wav_header.ChunkSize = 36 + audio_length;  /* to be updated */
-	wav_header.Format = 0x45564157;       /* letters "WAVE" in ASCII form */
+/* =============== write wav file header ============ */
+	wav_header.ChunkID = 0x46464952;           /* letters "RIFF" in ASCII form */
+	wav_header.ChunkSize = 36 + audio_length;  /* to be updated after writing the audio sample data */
+	wav_header.Format = 0x45564157;            /* letters "WAVE" in ASCII form */
 
-	wav_header.Subchunk1ID = 0x20746d66;     /* letters "fmt " in ASCII form */
-	wav_header.Subchunk1Size = 16;
-	wav_header.AudioFormat = 1;
-	wav_header.NumChannels = 1;
+	wav_header.Subchunk1ID = 0x20746d66;       /* letters "fmt " in ASCII form */
+	wav_header.Subchunk1Size = 16;             /* Fixed to 16 in this "dark_scene_detect" project!! */
+	wav_header.AudioFormat = 1;                /* Fixed to 1 in this "dark_scene_detect" project!! */
+	wav_header.NumChannels = 1;                /* Fixed to 1 in this "dark_scene_detect" project!! */
 	wav_header.SampleRate = WAV_SAMPLE_RATE;
 	wav_header.ByteRate = WAV_SAMPLE_RATE * wav_header.NumChannels * WAV_BIT_DEPTH / 8;
 	wav_header.BlockAlign = wav_header.NumChannels * WAV_BIT_DEPTH / 8;
 	wav_header.BitsPerSample = WAV_BIT_DEPTH;
 
 	wav_header.Subchunk2ID = 0x61746164;      /* letters "data" in ASCII form */
-	wav_header.Subchunk2Size = audio_length;  /* to be updated */
+	wav_header.Subchunk2Size = audio_length;  /* to be updated after writing the audio sample data */
 
   fwrite(&wav_header, 44, 1, fp_out_wav);
 
-  // write 2 seconds muted audio, so that we can drag the wav file into a wav editor,
-  // and play it first. After 1.x seconds, play the video.
-  memset(wav_buffer, 0x00, WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8);
-  fwrite(wav_buffer, 1, WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8, fp_out_wav);
-  fwrite(wav_buffer, 1, WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8, fp_out_wav);
-
   scale_factor = (pow(2.0, WAV_BIT_DEPTH) - 1.0) / 255.75 - 0.02; /* 0.02 is the margin */
 
-/*=============== calculates the sum of luma component (Y) ============ */
+/* =============== dark scene detection core logic ============ */
   while ( !feof(fp_input) )
   {
     fread(frame_buffer, 1, u32_width*u32_height, fp_input);
@@ -361,13 +367,10 @@ int main(int argc, char *argv[])
     u8_buffer = frame_buffer;
     u32_Y_sum = 0;  /* clear this accumulator at the beginning of each frame */
 
-    for (y=0; y<u32_height; y++)
+    for (offset=0; offset<(u32_width*u32_height); offset++)
     {
-      for (x=0; x<u32_width; x++)
-      {
-        u32_Y_sum += *u8_buffer;
-        u8_buffer++;
-      }
+      u32_Y_sum += *u8_buffer;
+      u8_buffer++;
     }
 
     /* skip chroma samples */
@@ -398,17 +401,19 @@ int main(int argc, char *argv[])
     /* Calculate APL and update *_APL.txt */
     apl = ((double)u32_Y_sum) / ((double)(u32_width*u32_height));
     fprintf(fp_out_APL, "%u, %.2f\n", frame_No, apl);
-    
-    /* Update *_visualization.wav */
+
+    /* =============== Update *_visualization.wav =============== */
+    samples_to_fill = (uint32_t)(((double)(WAV_SAMPLE_RATE * (frame_No+1)))/frame_rate + 0.5) - sample_No;
+
     #if (WAV_BIT_DEPTH == 8)
     {
-      memset(wav_buffer, (int8_t)((apl-128.0)*scale_factor+0.5), sample_per_frame);
+      memset(wav_buffer, (int8_t)((apl-128.0)*scale_factor+0.5), samples_to_fill);
     }
     #elif (WAV_BIT_DEPTH == 16)
     {
       int16_t  *p_sample = (int16_t *)wav_buffer;
       int16_t  temp = (int16_t)((apl - 128.0) * scale_factor + 0.5);
-      for (i=0; i<(int32_t)sample_per_frame; i++)
+      for (i=0; i<(int32_t)samples_to_fill; i++)
       {
         *p_sample = temp;
         p_sample++;
@@ -418,7 +423,7 @@ int main(int argc, char *argv[])
     {
       int32_t  *p_sample = (int32_t *)wav_buffer;
       int32_t  temp = (int32_t)((apl - 128.0) * scale_factor + 0.5);
-      for (i=0; i<(int32_t)sample_per_frame; i++)
+      for (i=0; i<(int32_t)samples_to_fill; i++)
       {
         *p_sample = temp;
         p_sample++;
@@ -428,7 +433,7 @@ int main(int argc, char *argv[])
     {
       int8_t  *p_sample = (int8_t *)wav_buffer;
       int32_t  temp = (int32_t)((apl - 128.0) * scale_factor + 0.5);
-      for (i=0; i<(int32_t)sample_per_frame; i++)
+      for (i=0; i<(int32_t)samples_to_fill; i++)
       {
         *p_sample = temp & 0xFF;  /* assuming little endian */
         p_sample++;
@@ -444,10 +449,10 @@ int main(int argc, char *argv[])
     }
     #endif
 
-    fwrite(wav_buffer, 1, sample_per_frame*WAV_BIT_DEPTH/8, fp_out_wav);
-    sample_No += sample_per_frame;
+    fwrite(wav_buffer, 1, samples_to_fill*WAV_BIT_DEPTH/8, fp_out_wav);
+    sample_No += samples_to_fill;
 
-    /* Detect dark scene and update *_result.txt */
+    /* =============== Detect dark scene and update *_result.txt =============== */
     if ( apl <= APL_threshold )
     {
       dark_scene_frames++;
