@@ -320,21 +320,7 @@ int main(int argc, char *argv[])
     exit(-9);
   }
 
-  if ( NULL == (wav_buffer = (uint8_t *)malloc(WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8)) )
-  {
-    printf("Error! WAV buffer allocation failed!\n");
-    fclose(fp_input);
-    fclose(fp_out_APL);
-    fclose(fp_out_result);
-    fclose(fp_out_wav);
-    free(frame_buffer);
-    exit(-10);
-  }
-
-  // print *_APL.csv header line
-  fprintf(fp_out_APL, "frame_No, APL\n");
-
-/* =============== write wav file header ============ */
+/* =============== prepare wav file header ============ */
 	wav_header.ChunkID = 0x46464952;           /* letters "RIFF" in ASCII form */
 	wav_header.ChunkSize = 36 + audio_length;  /* to be updated after writing the audio sample data */
 	wav_header.Format = 0x45564157;            /* letters "WAVE" in ASCII form */
@@ -351,6 +337,21 @@ int main(int argc, char *argv[])
 	wav_header.Subchunk2ID = 0x61746164;      /* letters "data" in ASCII form */
 	wav_header.Subchunk2Size = audio_length;  /* to be updated after writing the audio sample data */
 
+  if ( NULL == (wav_buffer = (uint8_t *)malloc(wav_header.NumChannels*WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8)) )
+  {
+    printf("Error! WAV buffer allocation failed!\n");
+    fclose(fp_input);
+    fclose(fp_out_APL);
+    fclose(fp_out_result);
+    fclose(fp_out_wav);
+    free(frame_buffer);
+    exit(-10);
+  }
+
+  // print *_APL.csv header line
+  fprintf(fp_out_APL, "frame_No, APL\n");
+
+  // write wav file header
   fwrite(&wav_header, 44, 1, fp_out_wav);
 
   scale_factor = (pow(2.0, WAV_BIT_DEPTH) - 1.0) / 255.75 - 0.02; /* 0.02 is the margin */
@@ -449,7 +450,7 @@ int main(int argc, char *argv[])
     }
     #endif
 
-    fwrite(wav_buffer, 1, samples_to_fill*WAV_BIT_DEPTH/8, fp_out_wav);
+    fwrite(wav_buffer, 1, wav_header.NumChannels * samples_to_fill * WAV_BIT_DEPTH / 8, fp_out_wav);
     sample_No += samples_to_fill;
 
     /* =============== Detect dark scene and update *_result.txt =============== */
@@ -493,7 +494,7 @@ END_OF_FILE:
   }
 
 /*=============== Update wav file header ============ */
-  audio_length = sample_No * WAV_BIT_DEPTH / 8;
+  audio_length = wav_header.NumChannels * sample_No * WAV_BIT_DEPTH / 8;
 
 	wav_header.ChunkSize = 36 + audio_length;
 	wav_header.Subchunk2Size = audio_length;
@@ -511,6 +512,12 @@ CLEAN_UP:
   {
     free(frame_buffer);
     frame_buffer = NULL;
+  }
+
+  if (wav_buffer != NULL)
+  {
+    free(wav_buffer);
+    wav_buffer = NULL;
   }
 
   return  0;
