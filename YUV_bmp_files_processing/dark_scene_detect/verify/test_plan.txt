@@ -1,0 +1,12 @@
+1. 验证8-bit/16-bit/24-bit/32-bit wav文件的可视化是否都正常。
+     实测表明，Nero Wave Editor v2.0.0.61 和 WaveCN 2.0.0.5 都不支持 24-bit/32-bit 的 wav文件，但 24-bit/32-bit 的 wav 文件可以被 WinAMP v2.95 播放。
+
+2. 验证同一场景、不同分辨率的YUV文件输入，检测结果是否相同。
+     done with
+       ./verify2.sh 30 ==> 检测结果不是完全相同，略有不同。
+       ./verify2.sh 16 ==> 检测结果差别较大。
+       ./verify2.sh 10 ==> 检测结果完全相同。
+       ./verify2.sh 20 ==> 检测结果不是完全相同，略有不同。
+       ./verify2.sh 224 ==> 除了 dark-rB_1280x720p50, 检测结果完全相同。
+
+3. 验证各种YUV文件格式的处理是否正确。

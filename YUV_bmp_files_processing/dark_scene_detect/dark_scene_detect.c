@@ -408,7 +408,8 @@ int main(int argc, char *argv[])
 
     #if (WAV_BIT_DEPTH == 8)
     {
-      memset(wav_buffer, (int8_t)((apl-128.0)*scale_factor+0.5), samples_to_fill);
+      // treat 8-bit wav data as unsigned.
+      memset(wav_buffer, (uint8_t)(apl*scale_factor+0.5), samples_to_fill);
     }
     #elif (WAV_BIT_DEPTH == 16)
     {
