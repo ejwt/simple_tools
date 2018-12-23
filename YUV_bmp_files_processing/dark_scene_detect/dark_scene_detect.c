@@ -354,7 +354,7 @@ int main(int argc, char *argv[])
   // write wav file header
   fwrite(&wav_header, 44, 1, fp_out_wav);
 
-  scale_factor = (pow(2.0, WAV_BIT_DEPTH) - 1.0) / 255.75 - 0.02; /* 0.02 is the margin */
+  scale_factor = (pow(2.0, WAV_BIT_DEPTH) - 1.0) / 256.0 - 0.02; /* 0.02 is the margin */
 
 /* =============== dark scene detection core logic ============ */
   while ( !feof(fp_input) )

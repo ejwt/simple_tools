@@ -1,0 +1,15 @@
+1. 验证8-bit/16-bit/24-bit/32-bit wav文件的可视化是否都正常。
+     实测表明，Nero Wave Editor v2.0.0.61 和 WaveCN 2.0.0.5 都不支持 24-bit/32-bit 的 wav文件，8-bit/16-bit的 wav文件也不支持4声道的。
+     但 24-bit/32-bit 的 wav 文件 和 8-bit/16-bit的 4声道 wav文件 可以被 WinAMP v2.95 播放。
+     鉴于此，只可视化 Y_activity (左声道) 和 frame_activity (右声道)，也就是输出2声道16-bit的 wav文件。
+
+2. 验证同一场景、不同分辨率的YUV文件输入，检测结果是否相同。
+     done with
+       ./verify2.sh 0.7 ==> 除了 still-rB_1280x720p50, 检测结果完全相同
+       ./verify2.sh 10  ==> 检测结果不是完全相同，略有不同。
+       ./verify2.sh 100 ==> 除了 still-rB_1280x720p50, 检测结果完全相同
+
+3. 验证各种YUV文件格式的处理是否正确。
+       ./verify3A.sh <any APL> ==> YUV 4:2:2 和 YUV 4:2:0 的检测结果完全相同，因为统计得到的 frame_activity 完全相同。
+       ./verify3B.sh <any APL> ==> foreman 检测结果完全相同，因为统计得到的 frame_activity 完全相同。
+                                   tulips 检测结果不是完全相同，略有不同。
