@@ -475,12 +475,13 @@ int main(int argc, char *argv[])
 
     #if (WAV_BIT_DEPTH == 8)
     {
-      int8_t  *p_sample = (int8_t *)wav_buffer;
-      int8_t  temp1 = (int8_t)((Y_activity - 128.0) * scale_factor + 0.5);
-      int8_t  temp2 = (int8_t)((Cb_activity - 128.0) * scale_factor + 0.5);
-      int8_t  temp3 = (int8_t)((Cr_activity - 128.0) * scale_factor + 0.5);
-      int8_t  temp4 = (int8_t)((frame_activity - 128.0) * scale_factor + 0.5);
-      
+      // treat 8-bit wav data as unsigned.
+      uint8_t  *p_sample = wav_buffer;
+      uint8_t  temp1 = (uint8_t)(Y_activity * scale_factor + 0.5);
+      uint8_t  temp2 = (uint8_t)(Cb_activity * scale_factor + 0.5);
+      uint8_t  temp3 = (uint8_t)(Cr_activity * scale_factor + 0.5);
+      uint8_t  temp4 = (uint8_t)(frame_activity * scale_factor + 0.5);
+
       for (i=0; i<(int32_t)samples_to_fill; i++)
       {
         *p_sample = temp1;
@@ -500,7 +501,7 @@ int main(int argc, char *argv[])
       int16_t  temp2 = (int16_t)((Cb_activity - 128.0) * scale_factor + 0.5);
       int16_t  temp3 = (int16_t)((Cr_activity - 128.0) * scale_factor + 0.5);
       int16_t  temp4 = (int16_t)((frame_activity - 128.0) * scale_factor + 0.5);
-      
+
       for (i=0; i<(int32_t)samples_to_fill; i++)
       {
         *p_sample = temp1;
@@ -520,7 +521,7 @@ int main(int argc, char *argv[])
       int32_t  temp2 = (int32_t)((Cb_activity - 128.0) * scale_factor + 0.5);
       int32_t  temp3 = (int32_t)((Cr_activity - 128.0) * scale_factor + 0.5);
       int32_t  temp4 = (int32_t)((frame_activity - 128.0) * scale_factor + 0.5);
-      
+
       for (i=0; i<(int32_t)samples_to_fill; i++)
       {
         *p_sample = temp1;
