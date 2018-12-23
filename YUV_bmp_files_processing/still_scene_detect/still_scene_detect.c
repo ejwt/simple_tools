@@ -417,8 +417,25 @@ int main(int argc, char *argv[])
   buffer_base[0] = frame_buffer;
   buffer_base[1] = frame_buffer + buffer_size/2;
 
-/*=============== Allocate 1 second wav buffer (4-channel audio) ============ */
-  if ( NULL == (wav_buffer = (uint8_t *)malloc(4*WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8)) )
+/* =============== prepare the wav file header ============ */
+	wav_header.ChunkID = 0x46464952;           /* letters "RIFF" in ASCII form */
+	wav_header.ChunkSize = 36 + audio_length;  /* to be updated after writing the audio sample data */
+	wav_header.Format = 0x45564157;            /* letters "WAVE" in ASCII form */
+
+	wav_header.Subchunk1ID = 0x20746d66;       /* letters "fmt " in ASCII form */
+	wav_header.Subchunk1Size = 16;             /* Fixed to 16 in this "still_scene_detect" project!! */
+	wav_header.AudioFormat = 1;                /* Fixed to 1 in this "still_scene_detect" project!! */
+	wav_header.NumChannels = 2;                /* Fixed to 2 in this "still_scene_detect" project!! */
+	wav_header.SampleRate = WAV_SAMPLE_RATE;
+	wav_header.ByteRate = WAV_SAMPLE_RATE * wav_header.NumChannels * WAV_BIT_DEPTH / 8;
+	wav_header.BlockAlign = wav_header.NumChannels * WAV_BIT_DEPTH / 8;
+	wav_header.BitsPerSample = WAV_BIT_DEPTH;
+
+	wav_header.Subchunk2ID = 0x61746164;      /* letters "data" in ASCII form */
+	wav_header.Subchunk2Size = audio_length;  /* to be updated after writing the audio sample data */
+
+/*=============== Allocate 1 second wav buffer (wav_header.NumChannels-channel audio) ============ */
+  if ( NULL == (wav_buffer = (uint8_t *)malloc(wav_header.NumChannels*WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8)) )
   {
     printf("Error! WAV buffer allocation failed!\n");
     fclose(fp_input);
@@ -432,23 +449,7 @@ int main(int argc, char *argv[])
   // print *_activity.csv header line
   fprintf(fp_out_activity, "frame_No, Y_activity, Cb_activity, Cr_activity, frame_activity\n");
 
-/* =============== write wav file header ============ */
-	wav_header.ChunkID = 0x46464952;           /* letters "RIFF" in ASCII form */
-	wav_header.ChunkSize = 36 + audio_length;  /* to be updated after writing the audio sample data */
-	wav_header.Format = 0x45564157;            /* letters "WAVE" in ASCII form */
-
-	wav_header.Subchunk1ID = 0x20746d66;       /* letters "fmt " in ASCII form */
-	wav_header.Subchunk1Size = 16;             /* Fixed to 16 in this "still_scene_detect" project!! */
-	wav_header.AudioFormat = 1;                /* Fixed to 1 in this "still_scene_detect" project!! */
-	wav_header.NumChannels = 4;                /* Fixed to 4 in this "still_scene_detect" project!! */
-	wav_header.SampleRate = WAV_SAMPLE_RATE;
-	wav_header.ByteRate = WAV_SAMPLE_RATE * wav_header.NumChannels * WAV_BIT_DEPTH / 8;
-	wav_header.BlockAlign = wav_header.NumChannels * WAV_BIT_DEPTH / 8;
-	wav_header.BitsPerSample = WAV_BIT_DEPTH;
-
-	wav_header.Subchunk2ID = 0x61746164;      /* letters "data" in ASCII form */
-	wav_header.Subchunk2Size = audio_length;  /* to be updated after writing the audio sample data */
-
+  // write the wav file header
   fwrite(&wav_header, 44, 1, fp_out_wav);
 
   scale_factor = (pow(2.0, WAV_BIT_DEPTH) - 1.0) / 255.75 - 0.02; /* 0.02 is the margin */
@@ -468,154 +469,120 @@ int main(int argc, char *argv[])
       fprintf(fp_out_activity, "%u, ", frame_No);
       frame_activity = calculate_activity(fp_out_activity, buffer_base[0], buffer_base[1], u32_width, u32_height, format_id,
                                           &Y_activity, &Cb_activity, &Cr_activity);
-    }
 
-    /* =============== Update *_visualization.wav =============== */
-    samples_to_fill = (uint32_t)(((double)(WAV_SAMPLE_RATE * (frame_No+1)))/frame_rate + 0.5) - sample_No;
+      /* =============== Update *_visualization.wav =============== */
+      samples_to_fill = (uint32_t)(((double)(WAV_SAMPLE_RATE * (frame_No+1)))/frame_rate + 0.5) - sample_No;
 
-    #if (WAV_BIT_DEPTH == 8)
-    {
-      // treat 8-bit wav data as unsigned.
-      uint8_t  *p_sample = wav_buffer;
-      uint8_t  temp1 = (uint8_t)(Y_activity * scale_factor + 0.5);
-      uint8_t  temp2 = (uint8_t)(Cb_activity * scale_factor + 0.5);
-      uint8_t  temp3 = (uint8_t)(Cr_activity * scale_factor + 0.5);
-      uint8_t  temp4 = (uint8_t)(frame_activity * scale_factor + 0.5);
-
-      for (i=0; i<(int32_t)samples_to_fill; i++)
+      #if (WAV_BIT_DEPTH == 8)
       {
-        *p_sample = temp1;
-        p_sample++;
-        *p_sample = temp2;
-        p_sample++;
-        *p_sample = temp3;
-        p_sample++;
-        *p_sample = temp4;
-        p_sample++;
+        // treat 8-bit wav data as unsigned.
+        uint8_t  *p_sample = wav_buffer;
+        uint8_t  temp1 = (uint8_t)(Y_activity * scale_factor + 0.5);
+        uint8_t  temp2 = (uint8_t)(frame_activity * scale_factor + 0.5);
+
+        for (i=0; i<(int32_t)samples_to_fill; i++)
+        {
+          *p_sample = temp1;
+          p_sample++;
+          *p_sample = temp2;
+          p_sample++;
+        }
       }
-    }
-    #elif (WAV_BIT_DEPTH == 16)
-    {
-      int16_t  *p_sample = (int16_t *)wav_buffer;
-      int16_t  temp1 = (int16_t)((Y_activity - 128.0) * scale_factor + 0.5);
-      int16_t  temp2 = (int16_t)((Cb_activity - 128.0) * scale_factor + 0.5);
-      int16_t  temp3 = (int16_t)((Cr_activity - 128.0) * scale_factor + 0.5);
-      int16_t  temp4 = (int16_t)((frame_activity - 128.0) * scale_factor + 0.5);
-
-      for (i=0; i<(int32_t)samples_to_fill; i++)
+      #elif (WAV_BIT_DEPTH == 16)
       {
-        *p_sample = temp1;
-        p_sample++;
-        *p_sample = temp2;
-        p_sample++;
-        *p_sample = temp3;
-        p_sample++;
-        *p_sample = temp4;
-        p_sample++;
+        int16_t  *p_sample = (int16_t *)wav_buffer;
+        int16_t  temp1 = (int16_t)((Y_activity - 128.0) * scale_factor + 0.5);
+        int16_t  temp2 = (int16_t)((frame_activity - 128.0) * scale_factor + 0.5);
+
+        for (i=0; i<(int32_t)samples_to_fill; i++)
+        {
+          *p_sample = temp1;
+          p_sample++;
+          *p_sample = temp2;
+          p_sample++;
+        }
       }
-    }
-    #elif (WAV_BIT_DEPTH == 32)
-    {
-      int32_t  *p_sample = (int32_t *)wav_buffer;
-      int32_t  temp1 = (int32_t)((Y_activity - 128.0) * scale_factor + 0.5);
-      int32_t  temp2 = (int32_t)((Cb_activity - 128.0) * scale_factor + 0.5);
-      int32_t  temp3 = (int32_t)((Cr_activity - 128.0) * scale_factor + 0.5);
-      int32_t  temp4 = (int32_t)((frame_activity - 128.0) * scale_factor + 0.5);
-
-      for (i=0; i<(int32_t)samples_to_fill; i++)
+      #elif (WAV_BIT_DEPTH == 32)
       {
-        *p_sample = temp1;
-        p_sample++;
-        *p_sample = temp2;
-        p_sample++;
-        *p_sample = temp3;
-        p_sample++;
-        *p_sample = temp4;
-        p_sample++;
+        int32_t  *p_sample = (int32_t *)wav_buffer;
+        int32_t  temp1 = (int32_t)((Y_activity - 128.0) * scale_factor + 0.5);
+        int32_t  temp2 = (int32_t)((frame_activity - 128.0) * scale_factor + 0.5);
+
+        for (i=0; i<(int32_t)samples_to_fill; i++)
+        {
+          *p_sample = temp1;
+          p_sample++;
+          *p_sample = temp2;
+          p_sample++;
+        }
       }
-    }
-    #elif (WAV_BIT_DEPTH == 24)
-    {
-      int8_t  *p_sample = (int8_t *)wav_buffer;
-      int32_t  temp1 = (int32_t)((Y_activity - 128.0) * scale_factor + 0.5);
-      int32_t  temp2 = (int32_t)((Cb_activity - 128.0) * scale_factor + 0.5);
-      int32_t  temp3 = (int32_t)((Cr_activity - 128.0) * scale_factor + 0.5);
-      int32_t  temp4 = (int32_t)((frame_activity - 128.0) * scale_factor + 0.5);
-      for (i=0; i<(int32_t)samples_to_fill; i++)
+      #elif (WAV_BIT_DEPTH == 24)
       {
-        *p_sample = temp1 & 0xFF;  /* assuming little endian */
-        p_sample++;
-        *p_sample = (temp1 >> 8) & 0xFF;
-        p_sample++;
-        *p_sample = (temp1 >> 16) & 0xFF;
-        p_sample++;
+        int8_t  *p_sample = (int8_t *)wav_buffer;
+        int32_t  temp1 = (int32_t)((Y_activity - 128.0) * scale_factor + 0.5);
+        int32_t  temp2 = (int32_t)((frame_activity - 128.0) * scale_factor + 0.5);
+        for (i=0; i<(int32_t)samples_to_fill; i++)
+        {
+          *p_sample = temp1 & 0xFF;  /* assuming little endian */
+          p_sample++;
+          *p_sample = (temp1 >> 8) & 0xFF;
+          p_sample++;
+          *p_sample = (temp1 >> 16) & 0xFF;
+          p_sample++;
 
-        *p_sample = temp2 & 0xFF;  /* assuming little endian */
-        p_sample++;
-        *p_sample = (temp2 >> 8) & 0xFF;
-        p_sample++;
-        *p_sample = (temp2 >> 16) & 0xFF;
-        p_sample++;
-
-        *p_sample = temp3 & 0xFF;  /* assuming little endian */
-        p_sample++;
-        *p_sample = (temp3 >> 8) & 0xFF;
-        p_sample++;
-        *p_sample = (temp3 >> 16) & 0xFF;
-        p_sample++;
-
-        *p_sample = temp4 & 0xFF;  /* assuming little endian */
-        p_sample++;
-        *p_sample = (temp4 >> 8) & 0xFF;
-        p_sample++;
-        *p_sample = (temp4 >> 16) & 0xFF;
-        p_sample++;
+          *p_sample = temp2 & 0xFF;  /* assuming little endian */
+          p_sample++;
+          *p_sample = (temp2 >> 8) & 0xFF;
+          p_sample++;
+          *p_sample = (temp2 >> 16) & 0xFF;
+          p_sample++;
+        }
       }
-    }
-    #else
-    {
-      #error "NOT implemented!";
-    }
-    #endif
-
-    fwrite(wav_buffer, 1, wav_header.NumChannels * samples_to_fill * WAV_BIT_DEPTH / 8, fp_out_wav);
-    sample_No += samples_to_fill;
-
-    /* =============== Detect still scene and update *_result.txt =============== */
-    if ( frame_activity <= activity_threshold )
-    {
-      still_scene_frames++;
-    }
-
-    if ( (frame_activity <= activity_threshold) && (is_still_scene == 0) )  /* Change from non-still scene to still scene */
-    {
-      is_still_scene = 1;
-      memset(temp_str0, 0x00, sizeof(temp_str0));
-      memset(temp_str1, 0x00, sizeof(temp_str1));
-      sprintf(temp_str0, "Still scene starts at ");
-      print_hhmmss_position(temp_str1, frame_No, frame_rate);
-      strcat(temp_str0, temp_str1);
-    }
-
-    if ( (frame_activity > activity_threshold) && (is_still_scene == 1) )  /* Change from still scene to non-still scene */
-    {
-END_OF_FILE:
-      is_still_scene = 0;
-      memset(temp_str1, 0x00, sizeof(temp_str1));
-      sprintf(temp_str1, ", ends at ");
-      strcat(temp_str0, temp_str1);
-
-      memset(temp_str1, 0x00, sizeof(temp_str1));
-      print_hhmmss_position(temp_str1, frame_No-1, frame_rate);
-      strcat(temp_str0, temp_str1);
-      strcat(temp_str0, "\n");
-
-      if (still_scene_frames > duration_threshold_frame)
+      #else
       {
-        fprintf(fp_out_result, temp_str0);
+        #error "NOT implemented!";
+      }
+      #endif
+
+      fwrite(wav_buffer, 1, wav_header.NumChannels * samples_to_fill * WAV_BIT_DEPTH / 8, fp_out_wav);
+      sample_No += samples_to_fill;
+
+      /* =============== Detect still scene and update *_result.txt =============== */
+      if ( frame_activity <= activity_threshold )
+      {
+        still_scene_frames++;
       }
 
-      still_scene_frames = 0;
+      if ( (frame_activity <= activity_threshold) && (is_still_scene == 0) )  /* Change from non-still scene to still scene */
+      {
+        is_still_scene = 1;
+        memset(temp_str0, 0x00, sizeof(temp_str0));
+        memset(temp_str1, 0x00, sizeof(temp_str1));
+        sprintf(temp_str0, "Still scene starts at ");
+        print_hhmmss_position(temp_str1, frame_No, frame_rate);
+        strcat(temp_str0, temp_str1);
+      }
+
+      if ( (frame_activity > activity_threshold) && (is_still_scene == 1) )  /* Change from still scene to non-still scene */
+      {
+  END_OF_FILE:
+        is_still_scene = 0;
+        memset(temp_str1, 0x00, sizeof(temp_str1));
+        sprintf(temp_str1, ", ends at ");
+        strcat(temp_str0, temp_str1);
+
+        memset(temp_str1, 0x00, sizeof(temp_str1));
+        print_hhmmss_position(temp_str1, frame_No-1, frame_rate);
+        strcat(temp_str0, temp_str1);
+        strcat(temp_str0, "\n");
+
+        if (still_scene_frames > duration_threshold_frame)
+        {
+          fprintf(fp_out_result, temp_str0);
+        }
+
+        still_scene_frames = 0;
+      }
     }
 
     frame_No++;
