@@ -275,8 +275,8 @@ int main(int argc, char *argv[])
 
 /* =============  Forming output filenames ============= */
   make_filenames(input_filename, APL_filename, "_APL.csv");
-  make_filenames(input_filename, result_filename, "_result.txt");
-  make_filenames(input_filename, wav_filename, "_visualization.wav");
+  make_filenames(input_filename, result_filename, "_dark-det-result.txt");
+  make_filenames(input_filename, wav_filename, "_dark-vis.wav");
 
 /* =============== Open the files ============ */
   if ( NULL == (fp_input = fopen(input_filename, "rb")) )

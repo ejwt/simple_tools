@@ -347,8 +347,8 @@ int main(int argc, char *argv[])
 
 /*==============  Forming output filenames ==========  */
   make_filenames(input_filename, activity_filename, "_activity.csv");
-  make_filenames(input_filename, result_filename, "_result.txt");
-  make_filenames(input_filename, wav_filename, "_visualization.wav");
+  make_filenames(input_filename, result_filename, "_still-det-result.txt");
+  make_filenames(input_filename, wav_filename, "_still-vis.wav");
 
 /*=============== Open the files ============ */
   if ( NULL == (fp_input = fopen(input_filename, "rb")) )
