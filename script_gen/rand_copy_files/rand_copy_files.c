@@ -18,7 +18,8 @@
 #include <stdint.h>
 #include <time.h>
 
-static char src_filename[2][384];
+static char src_filename[2][256];
+static char dst_path[256];
 
 static char get_ext_name(char *in_filename, char *out_ext_name)
 {
@@ -105,6 +106,24 @@ again_C:
     goto again_C;
   }
 
+again_P:
+  printf("\nOutput path:\n");
+  scanf("%s", dst_path);
+  for (i=0; dst_path[i] != '\0'; i++)
+  {
+    if ( (dst_path[i] == '/') || (dst_path[i] == '*') || (dst_path[i] == '?') ||
+         (dst_path[i] == '\"') || (dst_path[i] == '<') || (dst_path[i] == '>') || (dst_path[i] == '|') )
+    {
+      printf("\nThere's at least one illegal character in the path. Try again.\n");
+      goto  again_P;
+    }
+  }
+
+  if (dst_path[i-1] != '\\')
+  {
+    strcat(dst_path, "\\");
+  }
+
   if (NULL == (fp_bat = fopen("rand_copy.bat", "w")))
   {
     printf("\nCan't create file rand_copy.bat\n");
@@ -118,7 +137,7 @@ again_C:
 
   for (i=0; i<count; i++)
   {
-    fprintf(fp_bat, "copy %s %02d%s\n", src_filename[rand()&1], i, ext_A);
+    fprintf(fp_bat, "copy %s %s%02d%s\n", src_filename[rand()&1], dst_path, i, ext_A);
   }
 
   printf("rand_copy.bat has been generated. Do NOT peek into its content!\n");
