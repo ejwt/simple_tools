@@ -8,8 +8,8 @@
 *
 * Usage: interactive, follow the displayed instructions.
 *
-* Current version: 0.1
-* Last Modified: 2018-12-26
+* Current version: 0.2
+* Last Modified: 2018-12-27
 */
 
 #include <stdio.h>
@@ -81,7 +81,7 @@ again_B:
 
   if (strcmp(src_filename[0], src_filename[1]) == 0)
   {
-    printf("\nThe two files have the same name! Such generated bat file is useless! Try again.\n");
+    printf("\nThe two files have the same name! The generated bat file will be useless! Try again.\n");
     goto again_A;
   }
 
@@ -115,6 +115,7 @@ again_P:
          (dst_path[i] == '\"') || (dst_path[i] == '<') || (dst_path[i] == '>') || (dst_path[i] == '|') )
     {
       printf("\nThere's at least one illegal character in the path. Try again.\n");
+      printf("Note: In Windows, \\ should be used in the path, NOT /.\n");
       goto  again_P;
     }
   }
@@ -140,6 +141,7 @@ again_P:
     fprintf(fp_bat, "copy %s %s%02d%s\n", src_filename[rand()&1], dst_path, i, ext_A);
   }
 
+  fclose(fp_bat);
   printf("rand_copy.bat has been generated. Do NOT peek into its content!\n");
 
   return  0;
