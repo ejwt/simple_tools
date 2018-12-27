@@ -25,7 +25,7 @@ int main()
 {
   int8_t    fname_src[384]; // source filename
   FILE     *fp_src;
-  uint64_t  i; // loop counter; 2^64 - 1 (byte) = 16,777,216 (TiB)
+  uint64_t  i = 0; // loop counter; 2^64 - 1 (byte) = 16,777,216 (TiB)
   int32_t   split_mode; // split mode, 0 or 1
   uint8_t   byte_buffer = 0;
 
@@ -61,10 +61,9 @@ input_again_filename:
     uint64_t  last_block_size = 0; // size of the last destination block in bytes (smaller than others,
                                   // when src_length is not divisible by dst_block_size)
     int8_t  *fname_bat = "join.bat"; // filename of the batch file
-    int8_t  *fname_tmp = "dst_block_name.tmp"; // filename of the temporary file that stores the filenames of destination blocks
     FILE    *fp_bat, *fp_dst_block;
-    int8_t   fname_dst_block_0[340]; // filename of destination blocks, before block number
-    int8_t   fname_dst_block_2[340]; // filename of destination blocks, after block number
+    int8_t   fname_dst_block_0[256]; // filename of destination blocks, before block number
+    int8_t   fname_dst_block_2[256]; // filename of destination blocks, after block number
     int8_t   fname_dst_block[384]; // filename of destination blocks
     uint32_t  extra_dst_block_flag = 0;
     uint32_t  b_continue = 0;
@@ -106,7 +105,7 @@ input_again_last_blk:
       goto input_again_last_blk;
     }
 
-    //***** generate join.bat *****
+    //================== generate join.bat ==================
     printf("\nInput the destination block name (the part that BEFORE the block number) :\n");
     scanf("%s", fname_dst_block_0);
 
@@ -121,11 +120,11 @@ input_again_last_blk:
 
     if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
     {
-      fprintf(fp_bat, "copy %s%09llu%s joined_%s\ncopy /B joined_%s", fname_dst_block_0, 0, fname_dst_block_2, fname_src, fname_src);
+      fprintf(fp_bat, "copy %s%010llu%s joined_%s\ncopy /B joined_%s", fname_dst_block_0, i, fname_dst_block_2, fname_src, fname_src);
 
       for (i=1; i<(num_dst_block+extra_dst_block_flag-1); i++)
       {
-        fprintf(fp_bat, "+%s%09llu%s", fname_dst_block_0, i, fname_dst_block_2);
+        fprintf(fp_bat, "+%s%010llu%s", fname_dst_block_0, i, fname_dst_block_2);
 
         if (i%10 == 0)
         {
@@ -133,11 +132,11 @@ input_again_last_blk:
         }
       }
 
-      fprintf(fp_bat, "+%s%09llu%s\n", fname_dst_block_0, i, fname_dst_block_2);  /* last filename */
+      fprintf(fp_bat, "+%s%010llu%s\n", fname_dst_block_0, i, fname_dst_block_2);  /* last filename */
     }
     else
     {
-      fprintf(fp_bat, "copy %s%04llu%s joined_%s\ncopy /B joined_%s", fname_dst_block_0, 0, fname_dst_block_2, fname_src, fname_src);
+      fprintf(fp_bat, "copy %s%04llu%s joined_%s\ncopy /B joined_%s", fname_dst_block_0, i, fname_dst_block_2, fname_src, fname_src);
 
       for (i=1; i<(num_dst_block+extra_dst_block_flag-1); i++)
       {
@@ -156,13 +155,14 @@ input_again_last_blk:
 
     for (i=0; i<num_dst_block; i++)
     {
+      memset(fname_dst_block, 0x00, sizeof(fname_dst_block));
       if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
       {
-        sprintf(fname_dst_block, "%s%09llu%s\n", fname_dst_block_0, i, fname_dst_block_2);
+        sprintf(fname_dst_block, "%s%010llu%s", fname_dst_block_0, i, fname_dst_block_2);
       }
       else
       {
-        sprintf(fname_dst_block, "%s%04llu%s\n", fname_dst_block_0, i, fname_dst_block_2);
+        sprintf(fname_dst_block, "%s%04llu%s", fname_dst_block_0, i, fname_dst_block_2);
       }
 
       if (NULL == (fp_dst_block = fopen(fname_dst_block, "wb"))) //create destination block
@@ -177,14 +177,12 @@ input_again_last_blk:
         {
           printf("\nError! End of source data file has been reached.");
           fclose(fp_dst_block);
-          fclose(fp_src);
-
-          if (-1 == remove("dst_block_name.tmp") )
-          {
-            printf("\n Can't delete temporary file dst_block_name.tmp. You need to delete it manually.\n");
-          }
           goto Exit_prog;
         }
+
+
+
+        // TODO: Improve the performance!
         fread(&byte_buffer, 1, 1, fp_src);
         fwrite(&byte_buffer, 1, 1, fp_dst_block);
       }
@@ -196,14 +194,14 @@ input_again_last_blk:
     {
       if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
       {
-        sprintf(fname_dst_block, "%s%09llu%s\n", fname_dst_block_0, num_dst_block, fname_dst_block_2);
+        sprintf(fname_dst_block, "%s%010lu%s", fname_dst_block_0, num_dst_block, fname_dst_block_2);
       }
       else
       {
-        sprintf(fname_dst_block, "%s%04llu%s\n", fname_dst_block_0, num_dst_block, fname_dst_block_2);
+        sprintf(fname_dst_block, "%s%04lu%s", fname_dst_block_0, num_dst_block, fname_dst_block_2);
       }
 
-      if ( NULL == (fp_dst_block = fopen(fname_dst_block, "wb")) ) //create destination block
+      if ( NULL == (fp_dst_block = fopen(fname_dst_block, "wb")) ) // create destination block
       {
         printf("\nError! Can't creat file %s", fname_dst_block);
         goto Exit_prog;
@@ -213,6 +211,8 @@ input_again_last_blk:
 
       while( !feof(fp_src) )   // copy data
       {
+
+        // TODO: Improve the performance!
         fwrite(&byte_buffer, 1, 1, fp_dst_block);
         fread(&byte_buffer, 1, 1, fp_src);
       }
