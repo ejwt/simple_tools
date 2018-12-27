@@ -1,0 +1,2 @@
+net use * /del /y
+

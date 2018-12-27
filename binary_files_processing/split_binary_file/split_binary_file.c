@@ -1,85 +1,85 @@
 /*
-* Copyleft  2010-2016  Fu Xing (Andy)
+* Copyleft  2005-20xx  Fu Xing (Andy)
 * Author: Fu Xing
 *
 * File name: split_binary_file.c
 *
 * Abstract: This program splits a binary file. There are two modes.
 * Mode 0: Split the file evenly and generate several small file blocks. A batch file join.bat is also generated
-* to join the file blocks together.
+*         to join the file blocks together.
 * Mode 1: Specify the decimal start address and end address, the data between them are saved into a new file.
 *
-* Current version: 5.0
-* Last Modified: 2015-6-1
+* Current version: 5.1
+* Last Modified: 2018-12-27
 *
 */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
-typedef unsigned int UINT32;
-typedef unsigned char UINT8;
 
-#define MAX_NUM_DST_BLOCK    9999
+#define MAX_NUM_DST_BLOCK    10000
 
 int main()
 {
-  int8_t   fname_src[384]; // source filename
-  FILE    *fp_src;
-  int64_t  i; // loop counter; 2^63 - 1 (byte) = 8,388,608 (TiB)
-  int    split_mode; // mode, 0 or 1
-  UINT8  byte_buffer = 0;
+  int8_t    fname_src[384]; // source filename
+  FILE     *fp_src;
+  uint64_t  i; // loop counter; 2^64 - 1 (byte) = 16,777,216 (TiB)
+  int32_t   split_mode; // split mode, 0 or 1
+  uint8_t   byte_buffer = 0;
 
   //********* mode selection & source file operation *********
   printf("This program splits a binary file. There are two modes.\nMode 0: Split the file evenly \
 and generate several small file blocks. A batch file join.bat is also generated to join the file blocks together.\n\
 Mode 1: Specify the decimal start address and end address, the data between them are saved into a new file\n");
 
-input_again0:
+input_again_mode:
   printf("\nPlease select MODE. mode 0: Split the file evenly; mode 1: Specify the decimal \
 start address and end address. : ");
   scanf("%d", &split_mode);
   if ( (split_mode != 0) && (split_mode != 1) )
   {
     printf("\nError! You can only input 0 or 1 for selecting the mode.\n");
-    goto input_again0;
+    goto input_again_mode;
   }
 
-input_again2:
+input_again_filename:
   printf("\nInput the source file name: ");
   scanf("%s", fname_src);
   if (NULL == (fp_src = fopen(fname_src, "rb")))
   {
-    printf("Error! Can't open file %s \n", fname_src);
-    goto input_again2;
+    printf("Error! Can't open file %s\n", fname_src);
+    goto input_again_filename;
   }
 
   //************************** mode 0 *************************
   if (split_mode == 0)
   {
-    int64_t  dst_block_size = 1024; // destination block size
-    UINT32  num_dst_block = 1; // the number of destination blocks, the actual number is (num_dst_block + extra_dst_block_flag)
-    int64_t  last_block_size = 0; // size of the last destination block (smaller than others,
+    uint64_t  dst_block_size = 1024; // destination block size in bytes
+    uint32_t  num_dst_block = 1; // the number of destination blocks, NOT including the possible extra block; the actual number is (num_dst_block + extra_dst_block_flag)
+    uint64_t  last_block_size = 0; // size of the last destination block in bytes (smaller than others,
                                   // when src_length is not divisible by dst_block_size)
     int8_t  *fname_bat = "join.bat"; // filename of the batch file
     int8_t  *fname_tmp = "dst_block_name.tmp"; // filename of the temporary file that stores the filenames of destination blocks
-    FILE   *fp_tmp, *fp_bat, *fp_dst_block;
+    FILE    *fp_bat, *fp_dst_block;
     int8_t   fname_dst_block_0[340]; // filename of destination blocks, before block number
     int8_t   fname_dst_block_2[340]; // filename of destination blocks, after block number
-    int8_t   fname_dst_block_all[384]; // filename of destination blocks
-    UINT32  extra_dst_block_flag = 0;
-    UINT32  b_continue = 0;
-    int64_t  j; // loop counter
+    int8_t   fname_dst_block[384]; // filename of destination blocks
+    uint32_t  extra_dst_block_flag = 0;
+    uint32_t  b_continue = 0;
+    uint64_t  j; // loop counter
 
-input_again4L0:
+input_again_dst_size:
     printf("\nInput the size (in bytes) of the destination block: ");
-    scanf("%lld", &dst_block_size);
-    if ( dst_block_size < 1 )
+    scanf("%llu", &dst_block_size);
+    if (dst_block_size < 1)
     {
       printf("\nError! dst_block_size must be positive. Please input again.\n");
-      goto input_again4L0;
+      goto input_again_dst_size;
     }
 
+input_again_num_dstB:
     printf("\nInput the number of destination blocks (NOT including the possible last smaller block): ");
     scanf("%u", &num_dst_block);
 
@@ -92,75 +92,82 @@ input_again4L0:
       scanf("%d", &b_continue);
 
       if (b_continue == 0)
-        exit(-1);
+      {
+        goto input_again_num_dstB;
+      }
     }
 
-input_again4L2:
+input_again_last_blk:
     printf("\nDoes the last smaller block exist? (0: no, 1: yes) : ");
     scanf("%u", &extra_dst_block_flag);
     if ( (extra_dst_block_flag != 0) && (extra_dst_block_flag != 1) )
     {
       printf("\nError! You can only input 0 or 1 here.\n");
-      goto input_again4L2;
+      goto input_again_last_blk;
     }
 
-    //***** generate dst_block_name.tmp and join.bat *****
+    //***** generate join.bat *****
     printf("\nInput the destination block name (the part that BEFORE the block number) :\n");
     scanf("%s", fname_dst_block_0);
 
     printf("\nInput the destination block name (the part that AFTER the block number) :\n");
     scanf("%s", fname_dst_block_2);
 
-    if ( NULL == (fp_tmp = fopen(fname_tmp, "w+")) )
-    {
-      printf("Error!Can't creat file %s \n", fname_tmp);
-      goto Exit_prog;
-    }
-
     if ( NULL == (fp_bat = fopen(fname_bat, "w")) )
     {
       printf("Error!Can't creat file %s \n", fname_bat);
-        goto Exit_prog;
+      goto Exit_prog;
     }
-
-    fprintf(fp_bat, "copy /B ");
 
     if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
     {
-      for (i=0; i<(num_dst_block+extra_dst_block_flag-1); i++)
+      fprintf(fp_bat, "copy %s%09llu%s joined_%s\ncopy /B joined_%s", fname_dst_block_0, 0, fname_dst_block_2, fname_src, fname_src);
+
+      for (i=1; i<(num_dst_block+extra_dst_block_flag-1); i++)
       {
-        fprintf(fp_tmp, "%s%09lld%s\n", fname_dst_block_0, i, fname_dst_block_2);
-        fprintf(fp_bat, "%s%09lld%s+", fname_dst_block_0, i, fname_dst_block_2);
+        fprintf(fp_bat, "+%s%09llu%s", fname_dst_block_0, i, fname_dst_block_2);
+
+        if (i%10 == 0)
+        {
+          fprintf(fp_bat, "\ncopy /B joined_%s", fname_src);
+        }
       }
 
-      fprintf(fp_tmp, "%s%09lld%s\n", fname_dst_block_0, i, fname_dst_block_2);  /* last filename */
-      fprintf(fp_bat, "%s%09lld%s", fname_dst_block_0, i, fname_dst_block_2);
+      fprintf(fp_bat, "+%s%09llu%s\n", fname_dst_block_0, i, fname_dst_block_2);  /* last filename */
     }
     else
     {
-      for (i=0; i<(num_dst_block+extra_dst_block_flag-1); i++)
+      fprintf(fp_bat, "copy %s%04llu%s joined_%s\ncopy /B joined_%s", fname_dst_block_0, 0, fname_dst_block_2, fname_src, fname_src);
+
+      for (i=1; i<(num_dst_block+extra_dst_block_flag-1); i++)
       {
-        fprintf(fp_tmp, "%s%04lld%s\n", fname_dst_block_0, i, fname_dst_block_2);
-        fprintf(fp_bat, "%s%04lld%s+", fname_dst_block_0, i, fname_dst_block_2);
+        fprintf(fp_bat, "+%s%04llu%s", fname_dst_block_0, i, fname_dst_block_2);
+
+        if (i%10 == 0)
+        {
+          fprintf(fp_bat, "\ncopy /B joined_%s", fname_src);
+        }
       }
 
-      fprintf(fp_tmp, "%s%04lld%s\n", fname_dst_block_0, i, fname_dst_block_2);  /* last filename */
-      fprintf(fp_bat, "%s%04lld%s", fname_dst_block_0, i, fname_dst_block_2);
+      fprintf(fp_bat, "+%s%04llu%s\n", fname_dst_block_0, i, fname_dst_block_2);  /* last filename */
     }
 
-
-    fprintf(fp_bat, " Joined_%s\n", fname_src);
     fclose(fp_bat);
-
-    fseek(fp_tmp, 0, SEEK_SET);
 
     for (i=0; i<num_dst_block; i++)
     {
-      fscanf(fp_tmp, "%s", fname_dst_block_all); // read filename from temporary file
-
-      if (NULL == (fp_dst_block = fopen(fname_dst_block_all, "wb"))) //create destination block
+      if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
       {
-        printf("\nError! Can't creat file %s", fname_dst_block_all);
+        sprintf(fname_dst_block, "%s%09llu%s\n", fname_dst_block_0, i, fname_dst_block_2);
+      }
+      else
+      {
+        sprintf(fname_dst_block, "%s%04llu%s\n", fname_dst_block_0, i, fname_dst_block_2);
+      }
+
+      if (NULL == (fp_dst_block = fopen(fname_dst_block, "wb"))) //create destination block
+      {
+        printf("\nError! Can't creat file %s", fname_dst_block);
         goto Exit_prog;
       }
 
@@ -169,7 +176,6 @@ input_again4L2:
         if ( feof(fp_src) )
         {
           printf("\nError! End of source data file has been reached.");
-          fclose(fp_tmp);
           fclose(fp_dst_block);
           fclose(fp_src);
 
@@ -188,11 +194,18 @@ input_again4L2:
 
     if (extra_dst_block_flag) // copy last block (smaller than others)
     {
-      fscanf(fp_tmp, "%s", fname_dst_block_all); // read filename from temporary file
-
-      if ( NULL == (fp_dst_block = fopen(fname_dst_block_all, "wb")) ) //create destination block
+      if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
       {
-        printf("\nError! Can't creat file %s", fname_dst_block_all);
+        sprintf(fname_dst_block, "%s%09llu%s\n", fname_dst_block_0, num_dst_block, fname_dst_block_2);
+      }
+      else
+      {
+        sprintf(fname_dst_block, "%s%04llu%s\n", fname_dst_block_0, num_dst_block, fname_dst_block_2);
+      }
+
+      if ( NULL == (fp_dst_block = fopen(fname_dst_block, "wb")) ) //create destination block
+      {
+        printf("\nError! Can't creat file %s", fname_dst_block);
         goto Exit_prog;
       }
 
@@ -206,13 +219,6 @@ input_again4L2:
 
       fclose(fp_dst_block);
     }
-
-    fclose(fp_tmp);
-
-    if (-1 == remove("dst_block_name.tmp") )
-    {
-      printf("\n Can't delete temporary file dst_block_name.tmp. You need to delete it manually.\n");
-    }
   }
 
 
@@ -220,8 +226,8 @@ input_again4L2:
   else
   {
     int8_t   fname_dst[384]; // filename
-    int64_t  startAddress = 0;
-    int64_t  endAddress   = 0;
+    uint64_t  startAddress = 0;
+    uint64_t  endAddress   = 0;
     FILE    *fp_dst;
 
     printf("\nInput the destination filename: ");
@@ -233,11 +239,11 @@ input_again4L2:
     }
 
     printf("\nInput decimal start address: ");
-    scanf("%lld", &startAddress);
+    scanf("%llu", &startAddress);
 
 input_again6:
     printf("\nInput decimal end address: ");
-    scanf("%lld", &endAddress);
+    scanf("%llu", &endAddress);
     if ( endAddress < startAddress )
     {
       printf("\nError! endAddress must be larger than or equal to startAddress.\n");
@@ -265,10 +271,11 @@ input_again6:
     fclose(fp_dst);
   }
 
-  fclose(fp_src);
   printf("\n done!");
 
 Exit_prog:
+  fclose(fp_src);
+
   printf("\nPress ENTER to quit.\n");
   getchar();
   getchar();
