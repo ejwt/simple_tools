@@ -9,7 +9,7 @@
 *         to join the file blocks together.
 * Mode 1: Specify the decimal start address and end address, the data between them are saved into a new file.
 *
-* Current version: 5.3
+* Current version: 5.4
 * Last Modified: 2018-12-27
 *
 */
@@ -113,11 +113,31 @@ input_again_last_blk:
     }
 
     //================== generate join.bat ==================
+input_again_dst_block_0:
     printf("\nInput the destination block name (the part that BEFORE the block number) :\n");
     scanf("%s", fname_dst_block_0);
+    for (i=0; fname_dst_block_0[i] != '\0'; i++)
+    {
+      if ( (fname_dst_block_0[i] == '/') || (fname_dst_block_0[i] == '\\') || (fname_dst_block_0[i] == '*') || (fname_dst_block_0[i] == '?') || (fname_dst_block_0[i] == ':') ||
+           (fname_dst_block_0[i] == '\"') || (fname_dst_block_0[i] == '<') || (fname_dst_block_0[i] == '>') || (fname_dst_block_0[i] == '|') || (fname_dst_block_0[i] == ' ') )
+      {
+        printf("\nThere's at least one illegal character. Try again.\n");
+        goto  input_again_dst_block_0;
+      }
+    }
 
+input_again_dst_block_2:
     printf("\nInput the destination block name (the part that AFTER the block number) :\n");
     scanf("%s", fname_dst_block_2);
+    for (i=0; fname_dst_block_2[i] != '\0'; i++)
+    {
+      if ( (fname_dst_block_2[i] == '/') || (fname_dst_block_2[i] == '\\') || (fname_dst_block_2[i] == '*') || (fname_dst_block_2[i] == '?') || (fname_dst_block_2[i] == ':') ||
+           (fname_dst_block_2[i] == '\"') || (fname_dst_block_2[i] == '<') || (fname_dst_block_2[i] == '>') || (fname_dst_block_2[i] == '|') || (fname_dst_block_2[i] == ' ') )
+      {
+        printf("\nThere's at least one illegal character. Try again.\n");
+        goto  input_again_dst_block_2;
+      }
+    }
 
     if ( NULL == (fp_bat = fopen(fname_bat, "w")) )
     {
