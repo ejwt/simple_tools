@@ -9,7 +9,7 @@
 *         to join the file blocks together.
 * Mode 1: Specify the decimal start address and end address, the data between them are saved into a new file.
 *
-* Current version: 5.2
+* Current version: 5.3
 * Last Modified: 2018-12-27
 *
 */
@@ -20,6 +20,8 @@
 
 
 #define MAX_NUM_DST_BLOCK    10000
+
+#define NUM_BLOCKS_PER_BAT_LINE    (10)
 
 #define INITIAL_BUFFER_SIZE  (256 * 1024 * 1024)
 #define FINAL_BUFFER_SIZE    (64)
@@ -131,7 +133,7 @@ input_again_last_blk:
       {
         fprintf(fp_bat, "+%s%010llu%s", fname_dst_block_0, i, fname_dst_block_2);
 
-        if (i%10 == 0)
+        if (i%NUM_BLOCKS_PER_BAT_LINE == 0)
         {
           fprintf(fp_bat, "\ncopy /B joined_%s", fname_src);
         }
@@ -147,7 +149,7 @@ input_again_last_blk:
       {
         fprintf(fp_bat, "+%s%04llu%s", fname_dst_block_0, i, fname_dst_block_2);
 
-        if (i%10 == 0)
+        if (i%NUM_BLOCKS_PER_BAT_LINE == 0)
         {
           fprintf(fp_bat, "\ncopy /B joined_%s", fname_src);
         }
@@ -177,7 +179,7 @@ input_again_last_blk:
         goto Exit_prog;
       }
 
-      j = 0;  /* how many bytes of data have been copied for this data block */
+      j = 0;  /* how many bytes of data HAVE BEEN copied for this data block */
 
       for (buffer_size=INITIAL_BUFFER_SIZE; buffer_size >= FINAL_BUFFER_SIZE; buffer_size >>= SCALE_FACTOR)
       {
@@ -189,7 +191,7 @@ input_again_last_blk:
         {
           for (k=0; k<(dst_block_size-j)/buffer_size; k++)
           {
-            printf("buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);  // debug
+            //printf("buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);  // debug
 
             if ( buffer_size != fread(dynamic_buffer, 1, buffer_size, fp_src) )
             {
@@ -302,9 +304,8 @@ input_again_last_blk:
         {
           if (ferror(fp_src))
           {
-            printf("\nError occurred");
+            printf("\nError occurred when reading %s for creating %s (the last smaller block)\n", fname_src, fname_dst_block);
           }
-          printf(" when reading %s for creating %s (the last smaller block)\n", fname_src, fname_dst_block);
           fclose(fp_dst_block);
           goto Exit_prog;
         }
