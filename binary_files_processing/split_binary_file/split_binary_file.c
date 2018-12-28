@@ -118,10 +118,12 @@ input_again_dst_block_0:
     scanf("%s", fname_dst_block_0);
     for (i=0; fname_dst_block_0[i] != '\0'; i++)
     {
-      if ( (fname_dst_block_0[i] == '/') || (fname_dst_block_0[i] == '\\') || (fname_dst_block_0[i] == '*') || (fname_dst_block_0[i] == '?') || (fname_dst_block_0[i] == ':') ||
-           (fname_dst_block_0[i] == '\"') || (fname_dst_block_0[i] == '<') || (fname_dst_block_0[i] == '>') || (fname_dst_block_0[i] == '|') || (fname_dst_block_0[i] == ' ') )
+      if ( (fname_dst_block_0[i] == '/') || (fname_dst_block_0[i] == '\\') || (fname_dst_block_0[i] == '*') ||
+           (fname_dst_block_0[i] == '?') || (fname_dst_block_0[i] == ':')  || (fname_dst_block_0[i] == '\"') ||
+           (fname_dst_block_0[i] == '<') || (fname_dst_block_0[i] == '>')  || (fname_dst_block_0[i] == '|') ||
+           (fname_dst_block_0[i] == '+') || (fname_dst_block_0[i] == '^')  || (fname_dst_block_0[i] == '&') )
       {
-        printf("\nThere's at least one illegal character. Try again.\n");
+        printf("\nThere's at least one illegal character (/\\*?:\"<>|+^&). Try again.\n");
         goto  input_again_dst_block_0;
       }
     }
@@ -131,10 +133,12 @@ input_again_dst_block_2:
     scanf("%s", fname_dst_block_2);
     for (i=0; fname_dst_block_2[i] != '\0'; i++)
     {
-      if ( (fname_dst_block_2[i] == '/') || (fname_dst_block_2[i] == '\\') || (fname_dst_block_2[i] == '*') || (fname_dst_block_2[i] == '?') || (fname_dst_block_2[i] == ':') ||
-           (fname_dst_block_2[i] == '\"') || (fname_dst_block_2[i] == '<') || (fname_dst_block_2[i] == '>') || (fname_dst_block_2[i] == '|') || (fname_dst_block_2[i] == ' ') )
+      if ( (fname_dst_block_2[i] == '/') || (fname_dst_block_2[i] == '\\') || (fname_dst_block_2[i] == '*') ||
+           (fname_dst_block_2[i] == '?') || (fname_dst_block_2[i] == ':')  || (fname_dst_block_2[i] == '\"') ||
+           (fname_dst_block_2[i] == '<') || (fname_dst_block_2[i] == '>')  || (fname_dst_block_2[i] == '|') ||
+           (fname_dst_block_2[i] == '+') || (fname_dst_block_2[i] == '^')  || (fname_dst_block_2[i] == '&') )
       {
-        printf("\nThere's at least one illegal character. Try again.\n");
+        printf("\nThere's at least one illegal character (/\\*?:\"<>|+^&). Try again.\n");
         goto  input_again_dst_block_2;
       }
     }
@@ -144,6 +148,8 @@ input_again_dst_block_2:
       printf("Error!Can't creat file %s \n", fname_bat);
       goto Exit_prog;
     }
+
+    i = 0;
 
     if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
     {
