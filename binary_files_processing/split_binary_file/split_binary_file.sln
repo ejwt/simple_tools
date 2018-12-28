@@ -5,12 +5,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "split_binary_file", "split_
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Win32 = Debug|Win32
 		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{8AED0AFA-1BBA-4946-8634-0C887CF907D2}.Debug|Win32.ActiveCfg = Debug|Win32
-		{8AED0AFA-1BBA-4946-8634-0C887CF907D2}.Debug|Win32.Build.0 = Debug|Win32
 		{8AED0AFA-1BBA-4946-8634-0C887CF907D2}.Release|Win32.ActiveCfg = Release|Win32
 		{8AED0AFA-1BBA-4946-8634-0C887CF907D2}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection

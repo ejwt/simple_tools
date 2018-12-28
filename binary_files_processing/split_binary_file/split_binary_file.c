@@ -9,7 +9,7 @@
 *         to join the file blocks together.
 * Mode 1: Specify the decimal start address and end address, the data between them are saved into a new file.
 *
-* Current version: 5.1
+* Current version: 5.2
 * Last Modified: 2018-12-27
 *
 */
@@ -21,17 +21,24 @@
 
 #define MAX_NUM_DST_BLOCK    10000
 
+#define INITIAL_BUFFER_SIZE  (256 * 1024 * 1024)
+#define FINAL_BUFFER_SIZE    (64)
+#define SCALE_FACTOR    (4)  /* in each iteration, the buffer_size shifted right this many bits */
+// 2^SCALE_FACTOR must be smaller than FINAL_BUFFER_SIZE.
+
 int main()
 {
   int8_t    fname_src[384]; // source filename
   FILE     *fp_src;
-  uint64_t  i = 0; // loop counter; 2^64 - 1 (byte) = 16,777,216 (TiB)
+  uint64_t  i = 0; // counter; 2^64 - 1 (byte) = 16,777,216 (TiB)
   int32_t   split_mode; // split mode, 0 or 1
   uint8_t   byte_buffer = 0;
+  uint8_t   *dynamic_buffer;
+  uint32_t  buffer_size; // buffer size in bytes, for large amount of data copy
 
   //********* mode selection & source file operation *********
-  printf("This program splits a binary file. There are two modes.\nMode 0: Split the file evenly \
-and generate several small file blocks. A batch file join.bat is also generated to join the file blocks together.\n\
+  printf("This program splits a binary file. There are two modes.\n\nMode 0: Split the file evenly \
+and generate several small file blocks. A batch file join.bat is also generated to join the file blocks together.\n\n\
 Mode 1: Specify the decimal start address and end address, the data between them are saved into a new file\n");
 
 input_again_mode:
@@ -58,16 +65,14 @@ input_again_filename:
   {
     uint64_t  dst_block_size = 1024; // destination block size in bytes
     uint32_t  num_dst_block = 1; // the number of destination blocks, NOT including the possible extra block; the actual number is (num_dst_block + extra_dst_block_flag)
-    uint64_t  last_block_size = 0; // size of the last destination block in bytes (smaller than others,
-                                  // when src_length is not divisible by dst_block_size)
-    int8_t  *fname_bat = "join.bat"; // filename of the batch file
-    FILE    *fp_bat, *fp_dst_block;
-    int8_t   fname_dst_block_0[256]; // filename of destination blocks, before block number
-    int8_t   fname_dst_block_2[256]; // filename of destination blocks, after block number
-    int8_t   fname_dst_block[384]; // filename of destination blocks
+    int8_t   *fname_bat = "join.bat"; // filename of the batch file
+    FILE     *fp_bat, *fp_dst_block;
+    int8_t    fname_dst_block_0[256]; // filename of destination blocks, before block number
+    int8_t    fname_dst_block_2[256]; // filename of destination blocks, after block number
+    int8_t    fname_dst_block[384]; // filename of destination blocks
     uint32_t  extra_dst_block_flag = 0;
     uint32_t  b_continue = 0;
-    uint64_t  j; // loop counter
+    uint64_t  j, k; // loop counter
 
 input_again_dst_size:
     printf("\nInput the size (in bytes) of the destination block: ");
@@ -153,6 +158,7 @@ input_again_last_blk:
 
     fclose(fp_bat);
 
+    // =========================== create data blocks ===========================
     for (i=0; i<num_dst_block; i++)
     {
       memset(fname_dst_block, 0x00, sizeof(fname_dst_block));
@@ -171,20 +177,81 @@ input_again_last_blk:
         goto Exit_prog;
       }
 
-      for (j=0; j<dst_block_size; j++) // copy data
+      j = 0;  /* how many bytes of data have been copied for this data block */
+
+      for (buffer_size=INITIAL_BUFFER_SIZE; buffer_size >= FINAL_BUFFER_SIZE; buffer_size >>= SCALE_FACTOR)
+      {
+        if ( NULL == (dynamic_buffer = (uint8_t *)malloc(buffer_size)) )
+        {
+          continue;  // buffer allocation failed; let's try smaller buffers.
+        }
+        else
+        {
+          for (k=0; k<(dst_block_size-j)/buffer_size; k++)
+          {
+            printf("buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);  // debug
+
+            if ( buffer_size != fread(dynamic_buffer, 1, buffer_size, fp_src) )
+            {
+              if ( feof(fp_src) )
+              {
+                printf("\nError! Unexpected end of file");
+              }
+              else if (ferror(fp_src))
+              {
+                printf("\nError occurred");
+              }
+              printf(" when reading %s for creating %s\n", fname_src, fname_dst_block);
+              printf("buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);
+              fclose(fp_dst_block);
+              goto Exit_prog;
+            }
+
+            if ( buffer_size != fwrite(dynamic_buffer, 1, buffer_size, fp_dst_block) )
+            {
+              printf("\nError occurred when writing %s\n", fname_dst_block);
+              printf("buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);
+              fclose(fp_dst_block);
+              goto Exit_prog;
+            }
+          }
+          j += buffer_size * k;
+          free(dynamic_buffer);
+        }
+      }
+
+      for (; j<dst_block_size; j++) // copy remaining data
       {
         if ( feof(fp_src) )
         {
-          printf("\nError! End of source data file has been reached.");
+          printf("\nError! Unexpected end of file %s", fname_src);
           fclose(fp_dst_block);
           goto Exit_prog;
         }
 
+        if ( 1 != fread(&byte_buffer, 1, 1, fp_src) )
+        {
+          if ( feof(fp_src) )
+          {
+            printf("\nError! Unexpected end of file");
+          }
+          else if (ferror(fp_src))
+          {
+            printf("\nError occurred");
+          }
+          printf(" when reading %s for creating %s\n", fname_src, fname_dst_block);
+          printf("%llu bytes are NOT copied to %s\n", dst_block_size - j, fname_dst_block);
+          fclose(fp_dst_block);
+          goto Exit_prog;
+        }
 
-
-        // TODO: Improve the performance!
-        fread(&byte_buffer, 1, 1, fp_src);
-        fwrite(&byte_buffer, 1, 1, fp_dst_block);
+        if ( 1 != fwrite(&byte_buffer, 1, 1, fp_dst_block) )
+        {
+          printf("\nError occurred when writing %s\n", fname_dst_block);
+          printf("%llu bytes are NOT copied to %s\n", dst_block_size - j, fname_dst_block);
+          fclose(fp_dst_block);
+          goto Exit_prog;
+        }
       }
 
       fclose(fp_dst_block);
@@ -207,14 +274,40 @@ input_again_last_blk:
         goto Exit_prog;
       }
 
-      fread(&byte_buffer, 1, 1, fp_src);
+      if ( 1 != fread(&byte_buffer, 1, 1, fp_src) )
+      {
+        if ( feof(fp_src) )
+        {
+          printf("\nError! Unexpected end of file");
+        }
+        else if (ferror(fp_src))
+        {
+          printf("\nError occurred");
+        }
+        printf(" when reading %s for creating %s (the last smaller block)\n", fname_src, fname_dst_block);
+        fclose(fp_dst_block);
+        goto Exit_prog;
+      }
 
       while( !feof(fp_src) )   // copy data
       {
+        if ( 1 != fwrite(&byte_buffer, 1, 1, fp_dst_block) )
+        {
+          printf("\nError occurred when writing %s (the last smaller block)\n", fname_dst_block);
+          fclose(fp_dst_block);
+          goto Exit_prog;
+        }
 
-        // TODO: Improve the performance!
-        fwrite(&byte_buffer, 1, 1, fp_dst_block);
-        fread(&byte_buffer, 1, 1, fp_src);
+        if ( 1 != fread(&byte_buffer, 1, 1, fp_src) )
+        {
+          if (ferror(fp_src))
+          {
+            printf("\nError occurred");
+          }
+          printf(" when reading %s for creating %s (the last smaller block)\n", fname_src, fname_dst_block);
+          fclose(fp_dst_block);
+          goto Exit_prog;
+        }
       }
 
       fclose(fp_dst_block);
