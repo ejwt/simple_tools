@@ -33,12 +33,13 @@ int main()
   int8_t    fname_src[384]; // source filename
   FILE     *fp_src;
   uint64_t  i = 0; // counter; 2^64 - 1 (byte) = 16,777,216 (TiB)
+  uint64_t  j, k; // loop counter
   int32_t   split_mode; // split mode, 0 or 1
   uint8_t   byte_buffer = 0;
   uint8_t   *dynamic_buffer;
   uint32_t  buffer_size; // buffer size in bytes, for large amount of data copy
 
-  //********* mode selection & source file operation *********
+  //===================== mode selection & open input file =====================
   printf("This program splits a binary file. There are two modes.\n\nMode 0: Split the file evenly \
 and generate several small file blocks. A batch file join.bat is also generated to join the file blocks together.\n\n\
 Mode 1: Specify the decimal start address and end address, the data between them are saved into a new file\n");
@@ -74,7 +75,6 @@ input_again_filename:
     int8_t    fname_dst_block[384]; // filename of destination blocks
     uint32_t  extra_dst_block_flag = 0;
     uint32_t  b_continue = 0;
-    uint64_t  j, k; // loop counter
 
 input_again_dst_size:
     printf("\nInput the size (in bytes) of the destination block: ");
@@ -149,7 +149,7 @@ input_again_dst_block_2:
       goto Exit_prog;
     }
 
-    i = 0;
+    i = 0;  // destination block number (begins with 0)
 
     if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
     {
@@ -205,6 +205,7 @@ input_again_dst_block_2:
         goto Exit_prog;
       }
 
+      // =================== copy large amount of data using dynamic_buffer ===================
       j = 0;  /* how many bytes of data HAVE BEEN copied for this data block */
 
       for (buffer_size=INITIAL_BUFFER_SIZE; buffer_size >= FINAL_BUFFER_SIZE; buffer_size >>= SCALE_FACTOR)
@@ -225,7 +226,7 @@ input_again_dst_block_2:
               {
                 printf("\nError! Unexpected end of file");
               }
-              else if (ferror(fp_src))
+              else if ( ferror(fp_src) )
               {
                 printf("\nError occurred");
               }
@@ -248,7 +249,8 @@ input_again_dst_block_2:
         }
       }
 
-      for (; j<dst_block_size; j++) // copy remaining data
+      // =================== copy remaining data using 1-byte buffer ===================
+      for (; j<dst_block_size; j++)
       {
         if ( feof(fp_src) )
         {
@@ -263,7 +265,7 @@ input_again_dst_block_2:
           {
             printf("\nError! Unexpected end of file");
           }
-          else if (ferror(fp_src))
+          else if ( ferror(fp_src) )
           {
             printf("\nError occurred");
           }
@@ -285,7 +287,7 @@ input_again_dst_block_2:
       fclose(fp_dst_block);
     }
 
-    if (extra_dst_block_flag) // copy last block (smaller than others)
+    if (extra_dst_block_flag) // copy the last block (smaller than others)
     {
       if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
       {
@@ -308,7 +310,7 @@ input_again_dst_block_2:
         {
           printf("\nError! Unexpected end of file");
         }
-        else if (ferror(fp_src))
+        else if ( ferror(fp_src) )
         {
           printf("\nError occurred");
         }
@@ -328,7 +330,7 @@ input_again_dst_block_2:
 
         if ( 1 != fread(&byte_buffer, 1, 1, fp_src) )
         {
-          if (ferror(fp_src))
+          if ( ferror(fp_src) )
           {
             printf("\nError occurred when reading %s for creating %s (the last smaller block)\n", fname_src, fname_dst_block);
           }
@@ -345,13 +347,25 @@ input_again_dst_block_2:
   //************************** mode 1 ************************
   else
   {
-    int8_t   fname_dst[384]; // filename
+    int8_t    fname_dst[384];  // output filename
     uint64_t  startAddress = 0;
     uint64_t  endAddress   = 0;
-    FILE    *fp_dst;
+    FILE     *fp_dst; // output file handle
 
+input_again_dst_mode_2:
     printf("\nInput the destination filename: ");
     scanf("%s", fname_dst);
+    for (i=0; fname_dst[i] != '\0'; i++)
+    {
+      if ( (fname_dst[i] == '/') || (fname_dst[i] == '\\') || (fname_dst[i] == '*') ||
+           (fname_dst[i] == '?') || (fname_dst[i] == '\"') ||
+           (fname_dst[i] == '<') || (fname_dst[i] == '>')  || (fname_dst[i] == '|') )
+      {
+        printf("\nThere's at least one illegal character (/\\*?\"<>|). Try again.\n");
+        goto  input_again_dst_mode_2;
+      }
+    }
+
     if ( NULL == (fp_dst = fopen(fname_dst, "wb")) )
     {
       printf("Error! Can't create file %s\n", fname_dst);
@@ -361,31 +375,156 @@ input_again_dst_block_2:
     printf("\nInput decimal start address: ");
     scanf("%llu", &startAddress);
 
-input_again6:
+input_again_endAddress:
     printf("\nInput decimal end address: ");
     scanf("%llu", &endAddress);
     if ( endAddress < startAddress )
     {
       printf("\nError! endAddress must be larger than or equal to startAddress.\n");
-      goto input_again6;
+      goto input_again_endAddress;
     }
 
-    for (i=0; i<startAddress; i++)
-    {
-      fread(&byte_buffer, 1, 1, fp_src);  // skip
-    }
+    //==================== skip startAddress bytes =======================
+    // ======== skip large amount of data using dynamic_buffer ========
+    j = 0;  /* how many bytes of data HAVE BEEN skipped */
 
-    for (i=0; i<(endAddress-startAddress+1); i++)
+    for (buffer_size=INITIAL_BUFFER_SIZE; buffer_size >= FINAL_BUFFER_SIZE; buffer_size >>= SCALE_FACTOR)
     {
-      fread(&byte_buffer, 1, 1, fp_src);
-
-      if (feof(fp_src))
+      if ( NULL == (dynamic_buffer = (uint8_t *)malloc(buffer_size)) )
       {
-        printf("ERROR: EOF of input file reached, data copy stopped.\n");
-        break;
+        continue;  // buffer allocation failed; let's try smaller buffers.
+      }
+      else
+      {
+        for (k=0; k<(startAddress-j)/buffer_size; k++)
+        {
+          printf("[skip] buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);  // debug
+
+          if ( buffer_size != fread(dynamic_buffer, 1, buffer_size, fp_src) )
+          {
+            if ( feof(fp_src) )
+            {
+              printf("\nError! Unexpected end of file");
+            }
+            else if ( ferror(fp_src) )
+            {
+              printf("\nError occurred");
+            }
+            printf(" when reading %s (skipping stage)\n", fname_src);
+            printf("buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);
+            fclose(fp_dst);
+            goto Exit_prog;
+          }
+        }
+        j += buffer_size * k;
+        free(dynamic_buffer);
+      }
+    }
+
+    // =================== skip remaining data using 1-byte buffer ===================
+    for (; j<startAddress; j++)
+    {
+      if ( feof(fp_src) )
+      {
+        printf("\nError! Unexpected end of file %s (skipping stage)", fname_src);
+        fclose(fp_dst);
+        goto Exit_prog;
       }
 
-      fwrite(&byte_buffer, 1, 1, fp_dst);
+      if ( 1 != fread(&byte_buffer, 1, 1, fp_src) )
+      {
+        if ( feof(fp_src) )
+        {
+          printf("\nError! Unexpected end of file");
+        }
+        else if ( ferror(fp_src) )
+        {
+          printf("\nError occurred");
+        }
+        printf(" when reading %s (skipping stage)\n", fname_src);
+        printf("Only read %llu bytes\n", j);
+        fclose(fp_dst);
+        goto Exit_prog;
+      }
+    }
+
+    //================== copy (endAddress-startAddress+1) bytes =======================
+    // ======== copy large amount of data using dynamic_buffer ========
+    j = 0;  /* how many bytes of data HAVE BEEN copied */
+
+    for (buffer_size=INITIAL_BUFFER_SIZE; buffer_size >= FINAL_BUFFER_SIZE; buffer_size >>= SCALE_FACTOR)
+    {
+      if ( NULL == (dynamic_buffer = (uint8_t *)malloc(buffer_size)) )
+      {
+        continue;  // buffer allocation failed; let's try smaller buffers.
+      }
+      else
+      {
+        for (k=0; k<(endAddress-startAddress+1-j)/buffer_size; k++)
+        {
+          printf("[copy] buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);  // debug
+
+          if ( buffer_size != fread(dynamic_buffer, 1, buffer_size, fp_src) )
+          {
+            if ( feof(fp_src) )
+            {
+              printf("\nError! Unexpected end of file");
+            }
+            else if ( ferror(fp_src) )
+            {
+              printf("\nError occurred");
+            }
+            printf(" when reading %s (copying stage)\n", fname_src);
+            printf("buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);
+            fclose(fp_dst);
+            goto Exit_prog;
+          }
+
+          if ( buffer_size != fwrite(dynamic_buffer, 1, buffer_size, fp_dst) )
+          {
+            printf("\nError occurred when writing %s\n", fp_dst);
+            printf("buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);
+            fclose(fp_dst);
+            goto Exit_prog;
+          }
+        }
+        j += buffer_size * k;
+        free(dynamic_buffer);
+      }
+    }
+
+    // =================== copy remaining data using 1-byte buffer ===================
+    for (; j<(endAddress-startAddress+1); j++)
+    {
+      if ( feof(fp_src) )
+      {
+        printf("\nError! Unexpected end of file %s (copying stage)", fname_src);
+        fclose(fp_dst);
+        goto Exit_prog;
+      }
+
+      if ( 1 != fread(&byte_buffer, 1, 1, fp_src) )
+      {
+        if ( feof(fp_src) )
+        {
+          printf("\nError! Unexpected end of file");
+        }
+        else if ( ferror(fp_src) )
+        {
+          printf("\nError occurred");
+        }
+        printf(" when reading %s (copying stage)\n", fname_src);
+        printf("Only read %llu bytes\n", j);
+        fclose(fp_dst);
+        goto Exit_prog;
+      }
+
+      if ( 1 != fwrite(dynamic_buffer, 1, 1, fp_dst) )
+      {
+        printf("\nError occurred when writing %s\n", fp_dst);
+        fclose(fp_dst);
+        goto Exit_prog;
+      }
     }
 
     fclose(fp_dst);
