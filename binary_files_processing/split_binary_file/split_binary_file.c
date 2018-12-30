@@ -270,7 +270,9 @@ input_again_dst_block_2:
             printf("\nError occurred");
           }
           printf(" when reading %s for creating %s\n", fname_src, fname_dst_block);
-          printf("%llu bytes are NOT copied to %s\n", dst_block_size - j, fname_dst_block);
+          printf("Only %llu %s copied. ", j, (j>1)?"bytes":"byte");
+          printf("%llu %s %s NOT copied to %s\n", dst_block_size - j, ((dst_block_size-j)>1)?"bytes":"byte",
+                                                   ((dst_block_size-j)>1)?"are":"is", fname_dst_block);
           fclose(fp_dst_block);
           goto Exit_prog;
         }
@@ -278,7 +280,9 @@ input_again_dst_block_2:
         if ( 1 != fwrite(&byte_buffer, 1, 1, fp_dst_block) )
         {
           printf("\nError occurred when writing %s\n", fname_dst_block);
-          printf("%llu bytes are NOT copied to %s\n", dst_block_size - j, fname_dst_block);
+          printf("Only %llu %s copied. ", j, (j>1)?"bytes":"byte");
+          printf("%llu %s %s NOT copied to %s\n", dst_block_size - j, ((dst_block_size-j)>1)?"bytes":"byte",
+                                                   ((dst_block_size-j)>1)?"are":"is", fname_dst_block);
           fclose(fp_dst_block);
           goto Exit_prog;
         }
@@ -300,7 +304,7 @@ input_again_dst_block_2:
 
       if ( NULL == (fp_dst_block = fopen(fname_dst_block, "wb")) ) // create destination block
       {
-        printf("\nError! Can't creat file %s", fname_dst_block);
+        printf("\nError! Can't creat file %s (the last smaller block)", fname_dst_block);
         goto Exit_prog;
       }
 
@@ -442,7 +446,7 @@ input_again_endAddress:
           printf("\nError occurred");
         }
         printf(" when reading %s (skipping stage)\n", fname_src);
-        printf("Only read %llu bytes\n", j);
+        printf("Only read %llu %s\n", j, (j>1)?"bytes":"byte");
         fclose(fp_dst);
         goto Exit_prog;
       }
@@ -514,14 +518,15 @@ input_again_endAddress:
           printf("\nError occurred");
         }
         printf(" when reading %s (copying stage)\n", fname_src);
-        printf("Only read %llu bytes\n", j);
+        printf("Only copied %llu %s\n", j, (j>1)?"bytes":"byte");
         fclose(fp_dst);
         goto Exit_prog;
       }
 
-      if ( 1 != fwrite(dynamic_buffer, 1, 1, fp_dst) )
+      if ( 1 != fwrite(&byte_buffer, 1, 1, fp_dst) )
       {
         printf("\nError occurred when writing %s\n", fp_dst);
+        printf("Only copied %llu %s\n", j, (j>1)?"bytes":"byte");
         fclose(fp_dst);
         goto Exit_prog;
       }
