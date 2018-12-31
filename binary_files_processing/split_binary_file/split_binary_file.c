@@ -9,8 +9,8 @@
 *         to join the file blocks together.
 * Mode 1: Specify the decimal start address and end address, the data between them are saved into a new file.
 *
-* Current version: 5.4
-* Last Modified: 2018-12-27
+* Current version: 6.0
+* Last Modified: 2018-12-31
 *
 */
 #include <stdio.h>
@@ -86,7 +86,7 @@ input_again_dst_size:
     }
 
 input_again_num_dstB:
-    printf("\nInput the number of destination blocks (NOT including the possible last smaller block): ");
+    printf("\nInput the number of destination blocks (NOT including the possible last block): ");
     scanf("%u", &num_dst_block);
 
     if (num_dst_block > MAX_NUM_DST_BLOCK)
@@ -104,7 +104,7 @@ input_again_num_dstB:
     }
 
 input_again_last_blk:
-    printf("\nDoes the last smaller block exist? (0: no, 1: yes) : ");
+    printf("\nDoes the last block exist? (0: no, 1: yes) : ");
     scanf("%u", &extra_dst_block_flag);
     if ( (extra_dst_block_flag != 0) && (extra_dst_block_flag != 1) )
     {
@@ -291,7 +291,7 @@ input_again_dst_block_2:
       fclose(fp_dst_block);
     }
 
-    if (extra_dst_block_flag) // copy the last block (smaller than others)
+    if (extra_dst_block_flag) // copy the last block
     {
       if (b_continue)  // The number of destination blocks is more than MAX_NUM_DST_BLOCK.
       {
@@ -304,7 +304,7 @@ input_again_dst_block_2:
 
       if ( NULL == (fp_dst_block = fopen(fname_dst_block, "wb")) ) // create destination block
       {
-        printf("\nError! Can't creat file %s (the last smaller block)", fname_dst_block);
+        printf("\nError! Can't creat file %s (the last block)", fname_dst_block);
         goto Exit_prog;
       }
 
@@ -318,7 +318,7 @@ input_again_dst_block_2:
         {
           printf("\nError occurred");
         }
-        printf(" when reading %s for creating %s (the last smaller block)\n", fname_src, fname_dst_block);
+        printf(" when reading %s for creating %s (the last block)\n", fname_src, fname_dst_block);
         fclose(fp_dst_block);
         goto Exit_prog;
       }
@@ -327,7 +327,7 @@ input_again_dst_block_2:
       {
         if ( 1 != fwrite(&byte_buffer, 1, 1, fp_dst_block) )
         {
-          printf("\nError occurred when writing %s (the last smaller block)\n", fname_dst_block);
+          printf("\nError occurred when writing %s (the last block)\n", fname_dst_block);
           fclose(fp_dst_block);
           goto Exit_prog;
         }
@@ -336,7 +336,7 @@ input_again_dst_block_2:
         {
           if ( ferror(fp_src) )
           {
-            printf("\nError occurred when reading %s for creating %s (the last smaller block)\n", fname_src, fname_dst_block);
+            printf("\nError occurred when reading %s for creating %s (the last block)\n", fname_src, fname_dst_block);
           }
           fclose(fp_dst_block);
           goto Exit_prog;
@@ -402,7 +402,7 @@ input_again_endAddress:
       {
         for (k=0; k<(startAddress-j)/buffer_size; k++)
         {
-          printf("[skip] buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);  // debug
+          //printf("[skip] buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);  // debug
 
           if ( buffer_size != fread(dynamic_buffer, 1, buffer_size, fp_src) )
           {
@@ -466,7 +466,7 @@ input_again_endAddress:
       {
         for (k=0; k<(endAddress-startAddress+1-j)/buffer_size; k++)
         {
-          printf("[copy] buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);  // debug
+          //printf("[copy] buffer_size = %u, j = %llu, k = %llu\n", buffer_size, j, k);  // debug
 
           if ( buffer_size != fread(dynamic_buffer, 1, buffer_size, fp_src) )
           {
