@@ -212,7 +212,7 @@ static double calculate_activity(FILE *fp_log, uint8_t *buffer_A, uint8_t *buffe
   frame_activity = *Y_activity*0.75 + *Cb_activity/8.0 + *Cr_activity/8.0;
 
   // update *_activity.csv
-  fprintf(fp_log, "%.2f, %.2f, %.2f, %.2f\n", *Y_activity, *Cb_activity, *Cr_activity, frame_activity);
+  fprintf(fp_log, "%.6f, %.6f, %.6f, %.6f\n", *Y_activity, *Cb_activity, *Cr_activity, frame_activity);
 
   return  frame_activity;
 }
@@ -418,21 +418,21 @@ int main(int argc, char *argv[])
   buffer_base[1] = frame_buffer + buffer_size/2;
 
 /* =============== prepare the wav file header ============ */
-	wav_header.ChunkID = 0x46464952;           /* letters "RIFF" in ASCII form */
-	wav_header.ChunkSize = 36 + audio_length;  /* to be updated after writing the audio sample data */
-	wav_header.Format = 0x45564157;            /* letters "WAVE" in ASCII form */
+  wav_header.ChunkID = 0x46464952;           /* letters "RIFF" in ASCII form */
+  wav_header.ChunkSize = 36 + audio_length;  /* to be updated after writing the audio sample data */
+  wav_header.Format = 0x45564157;            /* letters "WAVE" in ASCII form */
 
-	wav_header.Subchunk1ID = 0x20746d66;       /* letters "fmt " in ASCII form */
-	wav_header.Subchunk1Size = 16;             /* Fixed to 16 in this "still_scene_detect" project!! */
-	wav_header.AudioFormat = 1;                /* Fixed to 1 in this "still_scene_detect" project!! */
-	wav_header.NumChannels = 2;                /* Fixed to 2 in this "still_scene_detect" project!! */
-	wav_header.SampleRate = WAV_SAMPLE_RATE;
-	wav_header.ByteRate = WAV_SAMPLE_RATE * wav_header.NumChannels * WAV_BIT_DEPTH / 8;
-	wav_header.BlockAlign = wav_header.NumChannels * WAV_BIT_DEPTH / 8;
-	wav_header.BitsPerSample = WAV_BIT_DEPTH;
+  wav_header.Subchunk1ID = 0x20746d66;       /* letters "fmt " in ASCII form */
+  wav_header.Subchunk1Size = 16;             /* Fixed to 16 in this "still_scene_detect" project!! */
+  wav_header.AudioFormat = 1;                /* Fixed to 1 in this "still_scene_detect" project!! */
+  wav_header.NumChannels = 2;                /* Fixed to 2 in this "still_scene_detect" project!! */
+  wav_header.SampleRate = WAV_SAMPLE_RATE;
+  wav_header.ByteRate = WAV_SAMPLE_RATE * wav_header.NumChannels * WAV_BIT_DEPTH / 8;
+  wav_header.BlockAlign = wav_header.NumChannels * WAV_BIT_DEPTH / 8;
+  wav_header.BitsPerSample = WAV_BIT_DEPTH;
 
-	wav_header.Subchunk2ID = 0x61746164;      /* letters "data" in ASCII form */
-	wav_header.Subchunk2Size = audio_length;  /* to be updated after writing the audio sample data */
+  wav_header.Subchunk2ID = 0x61746164;      /* letters "data" in ASCII form */
+  wav_header.Subchunk2Size = audio_length;  /* to be updated after writing the audio sample data */
 
 /*=============== Allocate 1 second wav buffer (wav_header.NumChannels-channel audio) ============ */
   if ( NULL == (wav_buffer = (uint8_t *)malloc(wav_header.NumChannels*WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8)) )
@@ -591,8 +591,8 @@ int main(int argc, char *argv[])
 /*=============== Update wav file header ============ */
   audio_length = wav_header.NumChannels * sample_No * WAV_BIT_DEPTH / 8;
 
-	wav_header.ChunkSize = 36 + audio_length;
-	wav_header.Subchunk2Size = audio_length;
+  wav_header.ChunkSize = 36 + audio_length;
+  wav_header.Subchunk2Size = audio_length;
 
   fseek(fp_out_wav, 0, SEEK_SET);
   fwrite(&wav_header, 44, 1, fp_out_wav);

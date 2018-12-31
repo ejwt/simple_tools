@@ -321,21 +321,21 @@ int main(int argc, char *argv[])
   }
 
 /* =============== prepare wav file header ============ */
-	wav_header.ChunkID = 0x46464952;           /* letters "RIFF" in ASCII form */
-	wav_header.ChunkSize = 36 + audio_length;  /* to be updated after writing the audio sample data */
-	wav_header.Format = 0x45564157;            /* letters "WAVE" in ASCII form */
+  wav_header.ChunkID = 0x46464952;           /* letters "RIFF" in ASCII form */
+  wav_header.ChunkSize = 36 + audio_length;  /* to be updated after writing the audio sample data */
+  wav_header.Format = 0x45564157;            /* letters "WAVE" in ASCII form */
 
-	wav_header.Subchunk1ID = 0x20746d66;       /* letters "fmt " in ASCII form */
-	wav_header.Subchunk1Size = 16;             /* Fixed to 16 in this "dark_scene_detect" project!! */
-	wav_header.AudioFormat = 1;                /* Fixed to 1 in this "dark_scene_detect" project!! */
-	wav_header.NumChannels = 1;                /* Fixed to 1 in this "dark_scene_detect" project!! */
-	wav_header.SampleRate = WAV_SAMPLE_RATE;
-	wav_header.ByteRate = WAV_SAMPLE_RATE * wav_header.NumChannels * WAV_BIT_DEPTH / 8;
-	wav_header.BlockAlign = wav_header.NumChannels * WAV_BIT_DEPTH / 8;
-	wav_header.BitsPerSample = WAV_BIT_DEPTH;
+  wav_header.Subchunk1ID = 0x20746d66;       /* letters "fmt " in ASCII form */
+  wav_header.Subchunk1Size = 16;             /* Fixed to 16 in this "dark_scene_detect" project!! */
+  wav_header.AudioFormat = 1;                /* Fixed to 1 in this "dark_scene_detect" project!! */
+  wav_header.NumChannels = 1;                /* Fixed to 1 in this "dark_scene_detect" project!! */
+  wav_header.SampleRate = WAV_SAMPLE_RATE;
+  wav_header.ByteRate = WAV_SAMPLE_RATE * wav_header.NumChannels * WAV_BIT_DEPTH / 8;
+  wav_header.BlockAlign = wav_header.NumChannels * WAV_BIT_DEPTH / 8;
+  wav_header.BitsPerSample = WAV_BIT_DEPTH;
 
-	wav_header.Subchunk2ID = 0x61746164;      /* letters "data" in ASCII form */
-	wav_header.Subchunk2Size = audio_length;  /* to be updated after writing the audio sample data */
+  wav_header.Subchunk2ID = 0x61746164;      /* letters "data" in ASCII form */
+  wav_header.Subchunk2Size = audio_length;  /* to be updated after writing the audio sample data */
 
   if ( NULL == (wav_buffer = (uint8_t *)malloc(wav_header.NumChannels*WAV_SAMPLE_RATE*WAV_BIT_DEPTH/8)) )
   {
@@ -401,7 +401,7 @@ int main(int argc, char *argv[])
 
     /* Calculate APL and update *_APL.txt */
     apl = ((double)u32_Y_sum) / ((double)(u32_width*u32_height));
-    fprintf(fp_out_APL, "%u, %.2f\n", frame_No, apl);
+    fprintf(fp_out_APL, "%u, %.6f\n", frame_No, apl);
 
     /* =============== Update *_visualization.wav =============== */
     samples_to_fill = (uint32_t)(((double)(WAV_SAMPLE_RATE * (frame_No+1)))/frame_rate + 0.5) - sample_No;
@@ -497,8 +497,8 @@ END_OF_FILE:
 /*=============== Update wav file header ============ */
   audio_length = wav_header.NumChannels * sample_No * WAV_BIT_DEPTH / 8;
 
-	wav_header.ChunkSize = 36 + audio_length;
-	wav_header.Subchunk2Size = audio_length;
+  wav_header.ChunkSize = 36 + audio_length;
+  wav_header.Subchunk2Size = audio_length;
 
   fseek(fp_out_wav, 0, SEEK_SET);
   fwrite(&wav_header, 44, 1, fp_out_wav);
