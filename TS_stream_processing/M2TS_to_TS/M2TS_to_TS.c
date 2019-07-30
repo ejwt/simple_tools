@@ -18,26 +18,30 @@
 /* filenames construction */
 static void make_filenames(char *in_filename, char *out_filename)
 {
-  int  i, j, k;  /* counter */
+  char *p, *q;
+  int  i = 0;
+  p = in_filename;
 
-  i = 0;
-  while (in_filename[i] != '\0')
+  while ( *p != '\0' )
+    p++;
+
+  while ( (*p != '.') && (p > in_filename) )
+    p--;    /* p points to the last "."; or the beginning of the input file name, if there's no "." in the input filename */
+
+  if (p == in_filename)   /* There's no "." in input filename */
   {
-    i++;
+    strcpy(out_filename, in_filename);
   }
-  j = i; /* record the position of the end of filename */
-
-  while ( (in_filename[i] != '.') && (i>0) )
+  else    /* There's at least one "." in original filename */
   {
-    i--;
+    q = p;  /* Record the position of the last (right-most) "." using pointer q */
+    p = in_filename;
+    while (p < q)
+      out_filename[i++] = *p ++;    /* only keep the portion before the last "." */
+
+    out_filename[i] = '\0';     /* form a null terminated ASCII string. */
   }
 
-  for (k=0; k<i; k++)
-  {
-    out_filename[k] = in_filename[k];
-  }
-
-  out_filename[k] = '\0';
   strcat(out_filename, ".ts");
 }
 
