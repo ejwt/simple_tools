@@ -10,7 +10,7 @@ do
     rm -f *.m3u8
 
     # make file list
-    ls > file_list.tmp
+    ls *.ts > file_list.tmp
 
     for FILE  in `cat file_list.tmp | grep mid`
     do
