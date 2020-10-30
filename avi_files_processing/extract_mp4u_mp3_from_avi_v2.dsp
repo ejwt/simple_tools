@@ -1,23 +1,23 @@
-# Microsoft Developer Studio Project File - Name="extract_mp4u_mp3_from_avi_v1" - Package Owner=<4>
+# Microsoft Developer Studio Project File - Name="extract_mp4u_mp3_from_avi_v2" - Package Owner=<4>
 # Microsoft Developer Studio Generated Build File, Format Version 6.00
 # ** DO NOT EDIT **
 
 # TARGTYPE "Win32 (x86) Console Application" 0x0103
 
-CFG=extract_mp4u_mp3_from_avi_v1 - Win32 Release
+CFG=extract_mp4u_mp3_from_avi_v2 - Win32 Release
 !MESSAGE This is not a valid makefile. To build this project using NMAKE,
 !MESSAGE use the Export Makefile command and run
 !MESSAGE 
-!MESSAGE NMAKE /f "extract_mp4u_mp3_from_avi_v1.mak".
+!MESSAGE NMAKE /f "extract_mp4u_mp3_from_avi_v2.mak".
 !MESSAGE 
 !MESSAGE You can specify a configuration when running NMAKE
 !MESSAGE by defining the macro CFG on the command line. For example:
 !MESSAGE 
-!MESSAGE NMAKE /f "extract_mp4u_mp3_from_avi_v1.mak" CFG="extract_mp4u_mp3_from_avi_v1 - Win32 Release"
+!MESSAGE NMAKE /f "extract_mp4u_mp3_from_avi_v2.mak" CFG="extract_mp4u_mp3_from_avi_v2 - Win32 Release"
 !MESSAGE 
 !MESSAGE Possible choices for configuration are:
 !MESSAGE 
-!MESSAGE "extract_mp4u_mp3_from_avi_v1 - Win32 Release" (based on "Win32 (x86) Console Application")
+!MESSAGE "extract_mp4u_mp3_from_avi_v2 - Win32 Release" (based on "Win32 (x86) Console Application")
 !MESSAGE 
 
 # Begin Project
@@ -48,13 +48,13 @@ LINK32=link.exe
 # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib  kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
 # Begin Target
 
-# Name "extract_mp4u_mp3_from_avi_v1 - Win32 Release"
+# Name "extract_mp4u_mp3_from_avi_v2 - Win32 Release"
 # Begin Group "Source Files"
 
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=.\extract_mp4u_mp3_from_avi_v1.c
+SOURCE=.\extract_mp4u_mp3_from_avi_v2.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
