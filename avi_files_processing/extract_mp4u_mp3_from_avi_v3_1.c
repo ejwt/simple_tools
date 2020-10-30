@@ -1,15 +1,15 @@
 /*
-* Copyleft (c) 2007-2010  Fu Xing (Andy)
+* Copyleft (c) 2007-2011  Fu Xing (Andy)
 * Author: Fu Xing (based on Zhou Yang's work)
 *
-* File name: extract_mp4u_mp3_from_avi_v3.c
+* File name: extract_mp4u_mp3_from_avi_v3_1.c
 * Abstract: The program is used to extract mp4u (xvid video) and mp3 (audio) files from an avi file (AVI-2 format).
 *      It only supports avi files that multiplexes only one audio stream and only one video stream.
 *
 * Usage: Run the program, and follow the on-screen instructions.
 *
-* Current version: 3.0
-* Last Modified: 2010-07-12
+* Current version: 3.1
+* Last Modified: 2011-08-23
 */
 
 #include <stdio.h>
@@ -20,14 +20,14 @@
 #define RIFF      (('R')|('I'<<8)|('F'<<16)|('F'<<24))
 #define AVI       (('A')|('V'<<8)|('I'<<16)|(' '<<24))
 #define LIST      (('L')|('I'<<8)|('S'<<16)|('T'<<24))
-#define MOVI     (('m')|('o'<<8)|('v'<<16)|('i'<<24))
+#define MOVI      (('m')|('o'<<8)|('v'<<16)|('i'<<24))
 #define REC       (('r')|('e'<<8)|('c'<<16)|(' '<<24))
-#define DB         (('d')|('b'<<8))
-#define DC         (('d')|('c'<<8))
+#define DB        (('d')|('b'<<8))
+#define DC        (('d')|('c'<<8))
 #define WB        (('w')|('b'<<8))
-#define IX          (('i')|('x'<<8))
-#define JUNK     (('J')|('U'<<8)|('N'<<16)|('K'<<24))
-#define IDX1     (('i')|('d'<<8)|('x'<<16)|('1'<<24))
+#define IX        (('i')|('x'<<8))
+#define JUNK      (('J')|('U'<<8)|('N'<<16)|('K'<<24))
+#define IDX1      (('i')|('d'<<8)|('x'<<16)|('1'<<24))
 
 long   avi_file_size;
 
@@ -38,25 +38,25 @@ long Search_FCC(FILE *file, int fcc, char list_flag);
 
 void main()
 {
-	char   avi_filename[256], video_filename[256], audio_filename[256];
+	char   avi_filename[384], video_filename[384], audio_filename[384];
 	FILE   *avi_file, *video_file, *audio_file;
 	unsigned char   *mp4u_header = "MP4U";
 
 	int     code, list_type;    /* 4 byte temporary readback buffer for judgement, including FOURCC, chunkID, and etc. */
-	long   movi_list_pos;  /* the next byte immediately follows 'movi' */
+	long    movi_list_pos;  /* the next byte immediately follows 'movi' */
 	int      audio_size, video_size, junk_size, index_size, list_size;
 	unsigned char   *video_buf, *audio_buf;
 	int      video_en = 0;
 	int      audio_en = 0;
 	int      choice_id = 0;
 	int      dont_ask_more = 0;
-	int      i;     /* loop counter for debugging */
-	int	   audio_buf_size = 0x100000;   /* 1MB */
+	int      i, j, k;     /* counter */
+	int	     audio_buf_size = 0x100000;   /* 1MB */
 	int      video_buf_size = 0x1000000;    /* 16MB */
 
 	printf("The program is used to extract mp4u (xvid video) and mp3 (audio) files from an avi file (AVI-2 format).\n");
 	printf("It only supports avi files that multiplexes only one audio stream and only one video stream.\n");
-	
+
 	do{
 		printf("\nThe name of the source avi file:\n");
 		gets(avi_filename);
@@ -81,7 +81,7 @@ void main()
 		if(choice_id == 0)
 			goto  END_PROG;
 	}
- 
+
  	fread(&code, 4, 1, avi_file);    /* Check whether ('RIFF' chunk size) matches (total AVI file size -8)  */
 	if( code != (avi_file_size-8) )
 	{
@@ -95,37 +95,64 @@ void main()
 		if(choice_id == 0)
 			goto  END_PROG;
 	}
-	
+
 /*=============  addtional info input  ============================*/
 	do{
 		printf("\nDo you want to save the video (*.mp4u) file? [1: yes, 0: no]");
 		scanf("%d", &video_en);
 	}while( (video_en!=0) && (video_en!=1) );
-	
+
 	do{
 		printf("\nDo you want to save the audio (*.mp3) file? [1: yes, 0: no]");
 		scanf("%d", &audio_en);
 	}while( (audio_en!=0) && (audio_en!=1) );
 
 	if ( (video_en == 0) && (audio_en == 0) )
-		goto END_PROG;	
+		goto END_PROG;
 
 /*=============  filenames construction ============================*/
-	for(i=0; (video_filename[i] = audio_filename[i] = avi_filename[i]) != '.'; i++) ;
+    i = 0;
+    while(avi_filename[i] != '\0')
+    {
+        i++;
+    }
 
-	i++;
-	video_filename[i] = audio_filename[i] = 'm';
-	
-	i++;
-	video_filename[i] = audio_filename[i] = 'p';
+    j = i; /* record the position of the end of filename */
 
-	video_filename[++i] = '4';
-	video_filename[++i] = 'u';
-	video_filename[++i] = '\0';
+    while( (avi_filename[i] != '.') && (i>0) )
+    {
+        i--;
+    }
 
-	i-=2;
-	audio_filename[i++] = '3';
-	audio_filename[i] = '\0';
+    //printf("i=%d\n", i);
+
+    if (i == 0)  /* There's no '.' in the avi filename. */
+    {
+        i = j;
+    }
+
+    //printf("i=%d\n", i);
+
+	for(k=0; k<i; k++)
+    {
+        video_filename[k] = audio_filename[k] = avi_filename[k];
+    }
+
+	video_filename[k] = audio_filename[k] = '.';
+    k++;
+
+	video_filename[k] = audio_filename[k] = 'm';
+    k++;
+
+	video_filename[k] = audio_filename[k] = 'p';
+
+	video_filename[++k] = '4';
+	video_filename[++k] = 'u';
+	video_filename[++k] = '\0';
+
+	k -= 2;
+	audio_filename[k++] = '3';
+	audio_filename[k] = '\0';
 
 
 /*=============  files creation and buffer allocation ============================*/
@@ -174,28 +201,28 @@ void main()
 
 	printf("\n Processing...     Please wait patiently.\n");
 	i = 0;   /* loop counter for debugging */
-	
+
 	do{
 		printf("%d\n", ++i);
 		fread(&code, 4, 1, avi_file);   /* get (2byte type ID) + (2bytes stream ID) */
-			
+
 		if(code == LIST)       /* curent location is a 'LIST' chunk */
 		{
 			fread(&list_size, 4, 1, avi_file);    /* read 'listSize' field */
 			fread(&list_type, 4, 1, avi_file);    /* read 'listType' field */
-			
+
 			if(list_type != REC)
 				fseek(avi_file, (list_size - 4), SEEK_CUR);   /* skip this LIST */
 			else
 				fread(&code, 4, 1, avi_file);    /* get chunkID */
 		}
-		
+
 		else  if( ((code>>16)==DB) || ((code>>16)==DC) )    /* Video chunk */
 		{
 			fread(&video_size, 4, 1, avi_file);   /* copy chunk size info */
 			if(video_en)
 				fwrite(&video_size, 4, 1, video_file);
-			
+
 			while(video_size >= video_buf_size)     /* copy video chunk data */
 			{
 				fread(video_buf, 1, video_buf_size, avi_file);
@@ -210,10 +237,10 @@ void main()
 				if(video_en)
 					fwrite(video_buf, 1, video_size, video_file);
 			}
-			
+
 			if(video_size&1)   /* odd number */
 				fseek(avi_file, 1, SEEK_CUR);    /* skip the padding byte */
-				/* The start of chunk data is word-aligned with respect to the start of the RIFF file. 
+				/* The start of chunk data is word-aligned with respect to the start of the RIFF file.
 				If the chunk size is an odd number of bytes, a padding byte with value zero is written after chunk data. */
 
 			video_size = 0;
@@ -222,7 +249,7 @@ void main()
 		else  if( (code>>16) == WB)             /* Audio chunk */
 		{
 			fread(&audio_size, 4, 1, avi_file);      /* get audio chunk size info */
-			
+
 			while(audio_size >= audio_buf_size)      /* copy audio chunk data */
 			{
 				fread(audio_buf, 1, audio_buf_size, avi_file);
@@ -286,7 +313,7 @@ END_PROG_A:
 	/*free the allocated memory space and close the opened files*/
 	free(audio_buf);
 	free(video_buf);
-	
+
 	if(audio_en)
 		fclose(audio_file);
 
@@ -314,9 +341,9 @@ long Search_FCC(FILE *file, int fcc, char list_flag)
 	if(list_flag)    /* (list_flag != 0) means searching for a LIST chunk with the specified FOURCC as the 'listType' */
 	{
 		do
-		{		
+		{
 			fread(&id_list, 4, 1, file);
-			
+
 			if(id_list == LIST)    /* a LIST chunk has been found, which is maybe what we need */
 			{
 				fread(&size, 4, 1, file);      /* get 'listSize' info */
@@ -351,7 +378,7 @@ long Search_FCC(FILE *file, int fcc, char list_flag)
 				fread(&size, 4, 1, file);	 /* get list size info */
 				fseek(file, size, SEEK_CUR);  /* Skip to the next chunk */
 			}
-			
+
 			else    /* what encountered is not a LIST chunk, but an ordinary chunk, which is maybe what we need */
 			{
 				if(id_list == fcc)    /* an ordinary chunk with the specified FOURCC as the chunk ID has been found */
