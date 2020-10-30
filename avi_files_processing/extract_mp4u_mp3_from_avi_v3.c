@@ -2,14 +2,14 @@
 * Copyleft (c) 2007-2010  Fu Xing (Andy)
 * Author: Fu Xing (based on Zhou Yang's work)
 *
-* File name: extract_mp4u_mp3_from_avi_v2.c
+* File name: extract_mp4u_mp3_from_avi_v3.c
 * Abstract: The program is used to extract mp4u (xvid video) and mp3 (audio) files from an avi file (AVI-2 format).
 *      It only supports avi files that multiplexes only one audio stream and only one video stream.
 *
 * Usage: Run the program, and follow the on-screen instructions.
 *
-* Current version: 2.0
-* Last Modified: 2009-10-5
+* Current version: 3.0
+* Last Modified: 2010-07-12
 */
 
 #include <stdio.h>
@@ -25,9 +25,11 @@
 #define DB         (('d')|('b'<<8))
 #define DC         (('d')|('c'<<8))
 #define WB        (('w')|('b'<<8))
-#define IX        (('i')|('x'<<8))
+#define IX          (('i')|('x'<<8))
+#define JUNK     (('J')|('U'<<8)|('N'<<16)|('K'<<24))
 #define IDX1     (('i')|('d'<<8)|('x'<<16)|('1'<<24))
 
+long   avi_file_size;
 
 
 long Search_FCC(FILE *file, int fcc, char list_flag);
@@ -40,10 +42,9 @@ void main()
 	FILE   *avi_file, *video_file, *audio_file;
 	unsigned char   *mp4u_header = "MP4U";
 
-	int     code, code2;    /* 4 byte temporary readback buffer for judgement, including FOURCC, chunkID, and etc. */
+	int     code, list_type;    /* 4 byte temporary readback buffer for judgement, including FOURCC, chunkID, and etc. */
 	long   movi_list_pos;  /* the next byte immediately follows 'movi' */
-	long   avi_file_size;    /* total source avi file size */
-	int      audio_size, video_size, index_size;
+	int      audio_size, video_size, junk_size, index_size, list_size;
 	unsigned char   *video_buf, *audio_buf;
 	int      video_en = 0;
 	int      audio_en = 0;
@@ -162,6 +163,12 @@ void main()
 	/* Search the position of LIST 'movi' */
 	movi_list_pos = Search_FCC(avi_file, MOVI, 1);
 
+	if(movi_list_pos == avi_file_size)
+	{
+		printf("\n ERROR! No \'movi\' chunk has been found! No video and audio data can be saved.\n");
+		goto  END_PROG_A;
+	}
+
 	/* scan the 'movi' LIST chunk to extract video and audio data */
 	fseek(avi_file, movi_list_pos, SEEK_SET);
 
@@ -174,11 +181,11 @@ void main()
 			
 		if(code == LIST)       /* curent location is a 'LIST' chunk */
 		{
-			fseek(avi_file, 4, SEEK_CUR);   /* skip 'listSize' field */
-			fread(&code2, 4, 1, avi_file);    /* read 'listType' field */
+			fread(&list_size, 4, 1, avi_file);    /* read 'listSize' field */
+			fread(&list_type, 4, 1, avi_file);    /* read 'listType' field */
 			
-			if(code2 != REC)
-				break;
+			if(list_type != REC)
+				fseek(avi_file, (list_size - 4), SEEK_CUR);   /* skip this LIST */
 			else
 				fread(&code, 4, 1, avi_file);    /* get chunkID */
 		}
@@ -229,18 +236,24 @@ void main()
 				fread(audio_buf, 1, audio_size, avi_file);
 				if(audio_en)
 					fwrite(audio_buf, 1, audio_size, audio_file);
+			}
 
 				if(audio_size&1)   /* odd number */
 					fseek(avi_file, 1, SEEK_CUR);    /* skip the padding byte */
 
 				audio_size = 0;
-			}
 		}
 
 		else if ( ((code>>16) == IX) || ((code&0x0000FFFF) == IX))             /* Index chunk */
 		{
 			fread(&index_size, 4, 1, avi_file);   /* get index size info */
 			fseek(avi_file, index_size, SEEK_CUR);    /* skip the index chunk */
+		}
+
+		else if ( code == JUNK )             /* Junk (padding) chunk */
+		{
+			fread(&junk_size, 4, 1, avi_file);   /* get junk size info */
+			fseek(avi_file, junk_size, SEEK_CUR);    /* skip the junk chunk */
 		}
 
 		else if (code == IDX1)             /* Index at the end of the avi file*/
@@ -252,7 +265,7 @@ void main()
 			{
 				do{
 					printf("\nWARNING! Encounter a ChunkID can't be handled by this program at adsress 0x%08X. \
-						Do you wish to continue?\n", (ftell(avi_file)-4));
+Its content is 0x%08X. Do you wish to continue?\n", (ftell(avi_file)-4), code);
 					printf("0: No. Terminate the program, please.\n");
 					printf("1: Yes. Continue anyway.\n");
 					printf("2: Yes. Continue anyway, and don't ask anymore! Continue regarless of error!!\n");
@@ -300,7 +313,7 @@ long Search_FCC(FILE *file, int fcc, char list_flag)
 
 	if(list_flag)    /* (list_flag != 0) means searching for a LIST chunk with the specified FOURCC as the 'listType' */
 	{
-		while(1)
+		do
 		{		
 			fread(&id_list, 4, 1, file);
 			
@@ -324,12 +337,12 @@ long Search_FCC(FILE *file, int fcc, char list_flag)
 				fread(&size, 4, 1, file);	 /* get chunk size info */
 				fseek(file, size, SEEK_CUR);  /* Skip to the next chunk */
 			}
-		}
+		}while( ftell(file) < avi_file_size);
 	}
 
 	else       /* (list_flag == 0) means searching for an ordinary chunk with the specified FOURCC as the 'chunkID' */
 	{
-		while(1)
+		do
 		{
 			fread(&id_list, 4, 1, file);
 
@@ -354,9 +367,10 @@ long Search_FCC(FILE *file, int fcc, char list_flag)
 					fseek(file, size, SEEK_CUR);  /* Skip to the next chunk */
 				}
 			}
-		}
+		}while( ftell(file) < avi_file_size);
 	}
-	
-}
 
+	if( ftell(file) >= (avi_file_size -8))    /* 'movi' has NOT been found */
+		return avi_file_size;
+}
 
