@@ -485,7 +485,7 @@ done
 # ========================== *.mp4 ==========================
 ls *.mp4 > filenames.tmp
 
-for FILE in `cat filenames.tmp`
+for FILE in `cat filenames.tmp | grep -v IMG`
 do
     unix_time=`echo ${FILE} | cut -c 1-13`
     echo 'Unix time: '${unix_time}
@@ -646,7 +646,7 @@ done
 ls *.jpg > filenames.tmp
 ls *.jpeg >> filenames.tmp
 
-for FILE in `cat filenames.tmp`
+for FILE in `cat filenames.tmp | grep -v IMG`
 do
     unix_time=`echo ${FILE} | cut -c 1-13`
     echo 'Unix time: '${unix_time}
